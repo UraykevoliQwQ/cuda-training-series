@@ -15,16 +15,16 @@ __device__ int reduce(thread_group g, int *x, int val) {
 __global__ void my_reduce_kernel(int *data){
 
   __shared__ int sdata[nTPB];
-  // task 1a: create a proper thread block group below
+  // 任务 1a：在下方创建正确的线程块组
   auto g1 = FIXME
   size_t gindex = g1.group_index().x * nTPB + g1.thread_index().x;
-  // task 1b: uncomment and create a proper 32-thread tile below, using group g1 created above
+  // 任务 1b：取消下方注释，并使用上面创建的 g1 创建正确的 32 线程 tile
   // auto g2 = FIXME 
-  // task 1c: uncomment and create a proper 16-thread tile below, using group g2 created above
+  // 任务 1c：取消下方注释，并使用上面创建的 g2 创建正确的 16 线程 tile
   // auto g3 = FIXME
-  // for each task, adjust the group to point to the last group created above
+  // 每个任务都要调整 group，使其指向上方最后创建的组
   auto g = FIXME
-  // Make sure we send in the appropriate patch of shared memory
+  // 确保传入合适的一段共享内存
   int sdata_offset = (g1.thread_index().x / g.size()) * g.size();
   reduce(g, sdata + sdata_offset, data[gindex]);
 }

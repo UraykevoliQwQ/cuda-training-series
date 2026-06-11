@@ -1,8 +1,8 @@
 #include <iostream>
-// Thread block size
+// 线程块大小
 #define BLOCK_SIZE 32
 
-// Matrices are stored in row-major order:
+// 矩阵按行主序存储：
 // M(row, col) = *(M.elements + row * M.stride + col)
 typedef struct {
     int width;
@@ -11,22 +11,22 @@ typedef struct {
     float* elements;
 } Matrix;
 
-// Get a matrix element
+// 获取矩阵元素
 __device__ float GetElement(const Matrix A, int row, int col)
 {
     return A.elements[row * A.stride + col];
 }
 
-// Set a matrix element
+// 设置矩阵元素
 __device__ void SetElement(Matrix A, int row, int col,
                            float value)
 {
     A.elements[row * A.stride + col] = value;
 }
 
-// Get the BLOCK_SIZExBLOCK_SIZE sub-matrix Asub of A that is
-// located col sub-matrices to the right and row sub-matrices down
-// from the upper-left corner of A
+// 获取 A 中 BLOCK_SIZExBLOCK_SIZE 的子矩阵 Asub，它位于
+// 相对于 A 左上角向右 col 个子矩阵、向下 row 个子矩阵的位置
+// 从 A 的左上角开始计算
  __device__ Matrix GetSubMatrix(Matrix A, int row, int col)
 {
     Matrix Asub;
@@ -39,14 +39,14 @@ __device__ void SetElement(Matrix A, int row, int col,
 }
 
 
-// Forward declaration of the matrix multiplication kernel
+// 矩阵乘法核函数的前向声明
 __global__ void MatMulKernel(const Matrix, const Matrix, Matrix);
 
-// Matrix multiplication - Host code
-// Matrix dimensions are assumed to be multiples of BLOCK_SIZE
+// 矩阵乘法 - 主机端代码
+// 假设矩阵维度是 BLOCK_SIZE 的倍数
 void MatMul(const Matrix A, const Matrix B, Matrix C)
 {
-    // Load A and B to device memory
+    // 将 A 和 B 加载到设备内存
     Matrix d_A;
     d_A.width = d_A.stride = A.width; d_A.height = A.height;
     size_t size = A.width * A.height * sizeof(float);
@@ -60,96 +60,96 @@ void MatMul(const Matrix A, const Matrix B, Matrix C)
     cudaMemcpy(d_B.elements, B.elements, size,
     cudaMemcpyHostToDevice);
 
-    // Allocate C in device memory
+    // 在设备内存中分配 C
     Matrix d_C;
     d_C.width = d_C.stride = C.width; d_C.height = C.height;
     size = C.width * C.height * sizeof(float);
     cudaMalloc(&d_C.elements, size);
 
-    // Invoke kernel
+    // 调用核函数
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid(B.width / dimBlock.x, A.height / dimBlock.y);
     MatMulKernel<<<dimGrid, dimBlock>>>(d_A, d_B, d_C);
 
-    // Read C from device memory
+    // 从设备内存读取 C
     cudaMemcpy(C.elements, d_C.elements, size,
                cudaMemcpyDeviceToHost);
 
-    // Free device memory
+    // 释放设备内存
     cudaFree(d_A.elements);
     cudaFree(d_B.elements);
     cudaFree(d_C.elements);
 }
 
-// Matrix multiplication kernel called by MatMul()
+// 由 MatMul() 调用的矩阵乘法核函数
  __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C)
 {
-    // Block row and column
+    // 线程块所在的行和列
     int blockRow = blockIdx.y;
     int blockCol = blockIdx.x;
 
-    // Each thread block computes one sub-matrix Csub of C
+    // 每个线程块计算 C 的一个子矩阵 Csub
     Matrix Csub = GetSubMatrix(C, blockRow, blockCol);
 
-    // Each thread computes one element of Csub
-    // by accumulating results into Cvalue
+    // 每个线程计算 Csub 的一个元素
+    // 通过累加到 Cvalue 中得到结果
     float Cvalue = 0;
 
-    // Thread row and column within Csub
+    // 线程在 Csub 内的行和列
     int row = threadIdx.y;
     int col = threadIdx.x;
 
-    // Loop over all the sub-matrices of A and B that are
-    // required to compute Csub
-    // Multiply each pair of sub-matrices together
-    // and accumulate the results
+    // 遍历计算 Csub 所需的 A 和 B 的所有子矩阵
+    // 计算 Csub 所需
+    // 将每对子矩阵相乘
+    // 并累加结果
     for (int m = 0; m < (A.width / BLOCK_SIZE); ++m) {
 
-        // Get sub-matrix Asub of A
+        // 获取 A 的子矩阵 Asub
         Matrix Asub = GetSubMatrix(A, blockRow, m);
 
-        // Get sub-matrix Bsub of B
+        // 获取 B 的子矩阵 Bsub
         Matrix Bsub = GetSubMatrix(B, m, blockCol);
 
-        // Shared memory used to store Asub and Bsub respectively
+        // 共享内存分别用于存储 Asub 和 Bsub
         __shared__ float As[BLOCK_SIZE][BLOCK_SIZE];
         __shared__ float Bs[BLOCK_SIZE][BLOCK_SIZE];
 
-        // Load Asub and Bsub from device memory to shared memory
-        // Each thread loads one element of each sub-matrix
+        // 将 Asub 和 Bsub 从设备内存加载到共享内存
+        // 每个线程加载每个子矩阵的一个元素
         As[row][col] = GetElement(Asub, row, col);
         Bs[row][col] = GetElement(Bsub, row, col);
 
-        // Synchronize to make sure the sub-matrices are loaded
-        // before starting the computation
+        // 同步以确保子矩阵已加载完成
+        // 再开始计算
         __syncthreads();
-        // Multiply Asub and Bsub together
+        // 将 Asub 和 Bsub 相乘
         for (int e = 0; e < BLOCK_SIZE; ++e)
             Cvalue += As[row][e] * Bs[e][col];
 
-        // Synchronize to make sure that the preceding
-        // computation is done before loading two new
-        // sub-matrices of A and B in the next iteration
+        // 同步，确保前面的
+        // 计算完成后，再在下一次迭代中加载两个新的
+        // A 和 B 的子矩阵
         __syncthreads();
     }
 
-    // Write Csub to device memory
-    // Each thread writes one element
+    // 将 Csub 写入设备内存
+    // 每个线程写入一个元素
     SetElement(Csub, row, col, Cvalue);
 }
 
 int main(){
-    const int num_m = 3;  // we need 3 matrices
-    const int side_dim = 128;  // side dimension of square matrix
-    Matrix *m = new Matrix[num_m]; // allocate matrix storage part 1
+    const int num_m = 3;  // 需要 3 个矩阵
+    const int side_dim = 128;  // 方阵边长
+    Matrix *m = new Matrix[num_m]; // 分配矩阵存储空间第 1 部分
     for (int i = 0; i < num_m; i++){
-        m[i].width = m[i].height = m[i].stride = side_dim; // set matrix params
-        m[i].elements = new float[side_dim*side_dim];      // allocate matrix storage part 2
-        if (i < 2)                                         // initialize first two matrices
+        m[i].width = m[i].height = m[i].stride = side_dim; // 设置矩阵参数
+        m[i].elements = new float[side_dim*side_dim];      // 分配矩阵存储空间第 2 部分
+        if (i < 2)                                         // 初始化前两个矩阵
             for (int j = 0; j < side_dim*side_dim; j++) m[i].elements[j] = 1.0f; }
-    MatMul(m[0], m[1], m[2]);  // perform matrix-multiply
+    MatMul(m[0], m[1], m[2]);  // 执行矩阵乘法
     std::cout << cudaGetErrorString(cudaGetLastError()) << std::endl;
-    for (int i = 0; i < side_dim*side_dim; i++) // perform results checking
+    for (int i = 0; i < side_dim*side_dim; i++) // 执行结果检查
         if (m[2].elements[i] != (float)side_dim) {std::cout << "Mismatch at index: " << i << " expected: " << (float)side_dim << " got: " << m[2].elements[i] << std::endl; return 0;}
     std::cout << "Success!" << std::endl;
     for (int i = 0; i < num_m; i++)

@@ -1,6 +1,6 @@
 #include <cstdio>
 #include <cstdlib>
-// error checking macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
     do { \
         cudaError_t __err = cudaGetLastError(); \
@@ -23,7 +23,7 @@ __global__ void inc(int *array, size_t n){
   size_t idx = threadIdx.x+blockDim.x*blockIdx.x;
   while (idx < n){
     array[idx]++;
-    idx += blockDim.x*gridDim.x; // grid-stride loop
+    idx += blockDim.x*gridDim.x; // 网格步长循环
     }
 }
 

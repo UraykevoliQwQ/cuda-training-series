@@ -1,6 +1,6 @@
 #include <cstdio>
 #include <cstdlib>
-// error checking macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
     do { \
         cudaError_t __err = cudaGetLastError(); \
@@ -23,7 +23,7 @@ __global__ void inc(int *array, size_t n){
   size_t idx = threadIdx.x+blockDim.x*blockIdx.x;
   while (idx < n){
     array[idx]++;
-    idx += blockDim.x*gridDim.x; // grid-stride loop
+    idx += blockDim.x*gridDim.x; // 网格步长循环
     }
 }
 
@@ -35,10 +35,10 @@ int main(){
   alloc_bytes(h_array, ds*sizeof(h_array[0]));
   cudaCheckErrors("cudaMallocManaged Error");
   memset(h_array, 0, ds*sizeof(h_array[0]));
-  cudaMemPrefetchAsync(h_array, ds*sizeof(h_array[0]), 0); // add in step 2c
+  cudaMemPrefetchAsync(h_array, ds*sizeof(h_array[0]), 0); // 在步骤 2c 中添加
   inc<<<256, 256>>>(h_array, ds);
   cudaCheckErrors("kernel launch error");
-  cudaMemPrefetchAsync(h_array, ds*sizeof(h_array[0]), cudaCpuDeviceId); // add in step 2c
+  cudaMemPrefetchAsync(h_array, ds*sizeof(h_array[0]), cudaCpuDeviceId); // 在步骤 2c 中添加
   cudaDeviceSynchronize();
   cudaCheckErrors("kernel execution error");
   for (int i = 0; i < ds; i++) 

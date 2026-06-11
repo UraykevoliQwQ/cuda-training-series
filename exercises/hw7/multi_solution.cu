@@ -4,14 +4,14 @@
 #include <sys/time.h>
 #include <stdio.h>
 
-// modifiable
+// 可修改
 typedef float ft;
 const int chunks = 64;
 const size_t ds = 1024*1024*chunks;
 const int count = 22;
 const int num_gpus = 4;
 
-// not modifiable
+// 不可修改
 const float sqrt_2PIf = 2.5066282747946493232942230134974f;
 const double sqrt_2PI = 2.5066282747946493232942230134974;
 __device__ float gpdf(float val, float sigma) {
@@ -22,7 +22,7 @@ __device__ double gpdf(double val, double sigma) {
   return exp(-0.5 * val * val) / (sigma * sqrt_2PI);
 }
 
-// compute average gaussian pdf value over a window around each point
+// 计算每个点周围窗口内的高斯 PDF 平均值
 __global__ void gaussian_pdf(const ft * __restrict__ x, ft * __restrict__ y, const ft mean, const ft sigma, const int n) {
   int idx = threadIdx.x + blockDim.x * blockIdx.x;
   if (idx < n) {
@@ -37,7 +37,7 @@ __global__ void gaussian_pdf(const ft * __restrict__ x, ft * __restrict__ y, con
   }
 }
 
-// error check macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
   do { \
     cudaError_t __err = cudaGetLastError(); \
@@ -50,7 +50,7 @@ __global__ void gaussian_pdf(const ft * __restrict__ x, ft * __restrict__ y, con
     } \
   } while (0)
 
-// host-based timing
+// 基于主机端的计时
 #define USECPSEC 1000000ULL
 
 unsigned long long dtime_usec(unsigned long long start) {

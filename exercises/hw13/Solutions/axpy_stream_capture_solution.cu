@@ -5,7 +5,7 @@
 #include <chrono>
 #include <iostream>
 
-// error checking macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
     do { \
         cudaError_t __err = cudaGetLastError(); \
@@ -20,7 +20,7 @@
 
 #define N 500000
 
-// Simple short kernels
+// 简单的短小核函数
 __global__
 void kernel_a(float * x, float * y){
   int idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -51,14 +51,14 @@ void kernel_d(float * x, float * y){
 
 int main(){
 
-// Set up and create events
+// 设置并创建事件
 cudaEvent_t event1;
 cudaEvent_t event2;
 
 cudaEventCreateWithFlags(&event1, cudaEventDisableTiming);
 cudaEventCreateWithFlags(&event2, cudaEventDisableTiming);
 
-// Set up and create streams
+// 设置并创建流
 const int num_streams = 2;
 
 cudaStream_t streams[num_streams];
@@ -67,7 +67,7 @@ for (int i = 0; i < num_streams; ++i){
     cudaStreamCreateWithFlags(&streams[i], cudaStreamNonBlocking);
 }
 
-// Set up and initialize host data
+// 设置并初始化主机端数据
 float* h_x;
 float* h_y;
 
@@ -81,7 +81,7 @@ for (int i = 0; i < N; ++i){
 }
 printf("\n");
 
-// Set up device data
+// 设置设备端数据
 float* d_x;
 float* d_y;
 
@@ -93,7 +93,7 @@ cudaMemcpy(d_x, h_x, N, cudaMemcpyHostToDevice);
 cudaMemcpy(d_y, h_y, N, cudaMemcpyHostToDevice);
 cudaCheckErrors("cudaMalloc failed");
 
-// Set up graph
+// 设置图
 bool graphCreated=false;
 cudaGraph_t graph;
 cudaGraphExec_t instance;
@@ -103,10 +103,10 @@ cudaGraphCreate(&graph, 0);
 int threads = 512;
 int blocks = (N + (threads - 1) / threads);
 
-// Launching work
+// 启动工作负载
 for (int i = 0; i < 100; ++i){
     if (graphCreated == false){
-    // If first pass, starting stream capture
+    // 如果是第一次执行，则开始流捕获
         cudaStreamBeginCapture(streams[0], cudaStreamCaptureModeGlobal);
         cudaCheckErrors("Stream begin capture failed");
 
@@ -137,26 +137,26 @@ for (int i = 0; i < 100; ++i){
         cudaStreamEndCapture(streams[0], &graph);
         cudaCheckErrors("Stream end capture failed");
 
-        // Creating the graph instance
+        // 创建图实例
         cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
         cudaCheckErrors("instantiating graph failed");
 
         graphCreated = true;
     }
-// Launch the graph instance
+// 启动图实例
 cudaGraphLaunch(instance, streams[0]);
 cudaCheckErrors("Launching graph failed");
 cudaStreamSynchronize(streams[0]);
 }
 
-// Count how many nodes we had
+// 统计图中节点数量
 cudaGraphNode_t *nodes = NULL;
 size_t numNodes = 0;
 cudaGraphGetNodes(graph, nodes, &numNodes);
 cudaCheckErrors("Graph get nodes failed");
 printf("Number of the nodes in the graph = %zu\n", numNodes);
 
-// Below is for timing
+// 以下用于计时
 cudaDeviceSynchronize();
 
 using namespace std::chrono;
@@ -176,13 +176,13 @@ duration<double> total_time = duration_cast<duration<double>>(t2 - t1);
 
 std::cout << "Time " << total_time.count() << " s" << std::endl;
 
-// Copy data back to host
+// 将数据复制回主机端
 cudaMemcpy(h_y, d_y, N, cudaMemcpyDeviceToHost);
 cudaCheckErrors("Finishing memcpy failed");
 
 cudaDeviceSynchronize();
 
-// Print out the first 25 values of h_y
+// 打印 h_y 的前 25 个值
 for (int i = 0; i < 25; ++i){
     printf("%2.0f ", h_y[i]);
 }

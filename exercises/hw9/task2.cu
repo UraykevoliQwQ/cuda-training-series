@@ -18,7 +18,7 @@ __device__ unsigned predicate_test(T data, T testval){
 
 using namespace cooperative_groups;
 
-// assume dsize is divisbile by nTPB
+// 假设 dsize 可被 nTPB 整除
 template <typename T>
 __global__ void my_remove_if(const T * __restrict__ idata, const T remove_val, T * __restrict__ odata, unsigned * __restrict__ idxs, const unsigned dsize){
 
@@ -28,7 +28,7 @@ __global__ void my_remove_if(const T * __restrict__ idata, const T remove_val, T
   unsigned tidx = g.thread_rank();
   unsigned gidx = tidx + nTPB*g.group_index().x;
   unsigned gridSize = g.size()*gridDim.x;
-  // first use grid-stride loop to have each block do a prefix sum over data set
+  // 首先使用网格步长循环，让每个线程块对数据集执行前缀和
   for (unsigned i = gidx; i < dsize; i+=gridSize){
     unsigned temp = predicate_test(idata[i], remove_val);
     sidxs[tidx] = temp;
@@ -39,9 +39,9 @@ __global__ void my_remove_if(const T * __restrict__ idata, const T remove_val, T
       if (j <= tidx){ sidxs[tidx] = temp;}}
     idxs[i] = temp;
     FIXME}
-  // grid-wide barrier
+  // 网格级屏障
   FIXME
-  // then compute final index, and move input data to output location
+  // 然后计算最终索引，并将输入数据移动到输出位置
   unsigned stride = 0;
   for (unsigned i = gidx; i < dsize; i+=gridSize){
     T temp = idata[i];
@@ -53,7 +53,7 @@ __global__ void my_remove_if(const T * __restrict__ idata, const T remove_val, T
 }
 
 int main(){
-  // data setup
+  // 数据设置
   mytype *d_idata, *d_odata,  *h_data;
   unsigned *d_idxs;
   size_t tsize = ((size_t)test_dsize)*sizeof(mytype);
@@ -62,8 +62,8 @@ int main(){
   cudaMalloc(&d_odata, tsize);
   cudaMemset(d_odata, 0, tsize);
   cudaMalloc(&d_idxs, test_dsize*sizeof(unsigned));
-  // check for support and device configuration
-  // and calculate maximum grid size
+  // 检查支持情况和设备配置
+  // 并计算最大网格大小
   cudaDeviceProp prop;
   cudaError_t err = cudaGetDeviceProperties(&prop, 0);
   if (err != cudaSuccess) {printf("cuda error: %s\n", cudaGetErrorString(err)); return 0;}
@@ -73,7 +73,7 @@ int main(){
   int numBlkPerSM;
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlkPerSM, my_remove_if<mytype>, nTPB, 0);
   printf("number of blocks per SM = %d\n", numBlkPerSM);
-  // test 1: no remove values
+  // 测试 1：没有要移除的值
   for (int i = 0; i < test_dsize; i++) h_data[i] = i;
   cudaMemcpy(d_idata, h_data, tsize, cudaMemcpyHostToDevice);
   cudaStream_t str;
@@ -86,9 +86,9 @@ int main(){
   cudaLaunchCooperativeKernel((void *)my_remove_if<mytype>, FIXME);
   err = cudaMemcpy(h_data, d_odata, tsize, cudaMemcpyDeviceToHost);
   if (err != cudaSuccess) {printf("cuda error: %s\n", cudaGetErrorString(err)); return 0;}
-  //validate
+  //验证
   for (int i = 0; i < test_dsize; i++) if (h_data[i] != i){printf("mismatch 1 at %d, was: %d, should be: %d\n", i, h_data[i], i); return 1;}
-  // test 2: with remove values
+  // 测试 2：包含要移除的值
   int val = 0;
   for (int i = 0; i < test_dsize; i++){
    if ((rand()/(float)RAND_MAX) > 0.5) h_data[i] = val++;
@@ -104,14 +104,14 @@ int main(){
   float et;
   cudaMemcpy(h_data, d_odata, tsize, cudaMemcpyDeviceToHost);
   cudaEventElapsedTime(&et, start, stop);
-  //validate
+  //验证
   for (int i = 0; i < val; i++) if (h_data[i] != i){printf("mismatch 2 at %d, was: %d, should be: %d\n", i, h_data[i], i); return 1;}
   printf("kernel time: %fms\n", et);
   cudaEventRecord(start);
   thrust::remove(t_data.begin(), t_data.end(), -1);
   cudaEventRecord(stop);
   thrust::host_vector<mytype> th_data = t_data;
-  // validate
+  // 验证
   for (int i = 0; i < val; i++) if (h_data[i] != th_data[i]){printf("mismatch 3 at %d, was: %d, should be: %d\n", i, th_data[i], h_data[i]); return 1;}
   cudaEventElapsedTime(&et, start, stop);
   printf("thrust time: %fms\n", et);

@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-// error checking macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
     do { \
         cudaError_t __err = cudaGetLastError(); \
@@ -14,26 +14,26 @@
     } while (0)
 
 
-const size_t DSIZE = 16384;      // matrix side dimension
-const int block_size = 256;  // CUDA maximum is 1024
-// matrix row-sum kernel
+const size_t DSIZE = 16384;      // 矩阵边长
+const int block_size = 256;  // CUDA 最大值为 1024
+// 矩阵行求和核函数
 __global__ void row_sums(const float *A, float *sums, size_t ds){
 
-  int idx = threadIdx.x+blockDim.x*blockIdx.x; // create typical 1D thread index from built-in variables
+  int idx = threadIdx.x+blockDim.x*blockIdx.x; // 用内置变量创建典型的一维线程索引
   if (idx < ds){
     float sum = 0.0f;
     for (size_t i = 0; i < ds; i++)
-      sum += A[idx*ds+i];         // write a for loop that will cause the thread to iterate across a row, keeeping a running sum, and write the result to sums
+      sum += A[idx*ds+i];         // 编写一个 for 循环，让线程遍历一整行、持续累加，并将结果写入 sums
     sums[idx] = sum;
 }}
-// matrix column-sum kernel
+// 矩阵列求和核函数
 __global__ void column_sums(const float *A, float *sums, size_t ds){
 
-  int idx = threadIdx.x+blockDim.x*blockIdx.x; // create typical 1D thread index from built-in variables
+  int idx = threadIdx.x+blockDim.x*blockIdx.x; // 用内置变量创建典型的一维线程索引
   if (idx < ds){
     float sum = 0.0f;
     for (size_t i = 0; i < ds; i++)
-      sum += A[idx+ds*i];         // write a for loop that will cause the thread to iterate down a column, keeeping a running sum, and write the result to sums
+      sum += A[idx+ds*i];         // 编写一个 for 循环，让线程沿列向下遍历、持续累加，并将结果写入 sums
     sums[idx] = sum;
 }}
 bool validate(float *data, size_t sz){
@@ -44,33 +44,33 @@ bool validate(float *data, size_t sz){
 int main(){
 
   float *h_A, *h_sums, *d_A, *d_sums;
-  h_A = new float[DSIZE*DSIZE];  // allocate space for data in host memory
+  h_A = new float[DSIZE*DSIZE];  // 在主机内存中为数据分配空间
   h_sums = new float[DSIZE]();
-  for (int i = 0; i < DSIZE*DSIZE; i++)  // initialize matrix in host memory
+  for (int i = 0; i < DSIZE*DSIZE; i++)  // 在主机内存中初始化矩阵
     h_A[i] = 1.0f;
-  cudaMalloc(&d_A, DSIZE*DSIZE*sizeof(float));  // allocate device space for A
-  cudaMalloc(&d_sums, DSIZE*sizeof(float));  // allocate device space for vector d_sums
-  cudaCheckErrors("cudaMalloc failure"); // error checking
-  // copy matrix A to device:
+  cudaMalloc(&d_A, DSIZE*DSIZE*sizeof(float));  // 为 A 分配设备端空间
+  cudaMalloc(&d_sums, DSIZE*sizeof(float));  // 为向量 d_sums 分配设备端空间
+  cudaCheckErrors("cudaMalloc failure"); // 错误检查
+  // 将矩阵 A 复制到设备端：
   cudaMemcpy(d_A, h_A, DSIZE*DSIZE*sizeof(float), cudaMemcpyHostToDevice);
   cudaCheckErrors("cudaMemcpy H2D failure");
-  //cuda processing sequence step 1 is complete
+  //CUDA 处理序列第 1 步完成
   row_sums<<<(DSIZE+block_size-1)/block_size, block_size>>>(d_A, d_sums, DSIZE);
   cudaCheckErrors("kernel launch failure");
-  //cuda processing sequence step 2 is complete
-  // copy vector sums from device to host:
+  //CUDA 处理序列第 2 步完成
+  // 将向量 sums 从设备端复制回主机端：
   cudaMemcpy(h_sums, d_sums, DSIZE*sizeof(float), cudaMemcpyDeviceToHost);
-  //cuda processing sequence step 3 is complete
+  //CUDA 处理序列第 3 步完成
   cudaCheckErrors("kernel execution failure or cudaMemcpy H2D failure");
   if (!validate(h_sums, DSIZE)) return -1; 
   printf("row sums correct!\n");
   cudaMemset(d_sums, 0, DSIZE*sizeof(float));
   column_sums<<<(DSIZE+block_size-1)/block_size, block_size>>>(d_A, d_sums, DSIZE);
   cudaCheckErrors("kernel launch failure");
-  //cuda processing sequence step 2 is complete
-  // copy vector sums from device to host:
+  //CUDA 处理序列第 2 步完成
+  // 将向量 sums 从设备端复制回主机端：
   cudaMemcpy(h_sums, d_sums, DSIZE*sizeof(float), cudaMemcpyDeviceToHost);
-  //cuda processing sequence step 3 is complete
+  //CUDA 处理序列第 3 步完成
   cudaCheckErrors("kernel execution failure or cudaMemcpy H2D failure");
   if (!validate(h_sums, DSIZE)) return -1; 
   printf("column sums correct!\n");

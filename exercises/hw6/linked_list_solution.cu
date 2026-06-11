@@ -1,6 +1,6 @@
 #include <cstdio>
 #include <cstdlib>
-// error checking macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
     do { \
         cudaError_t __err = cudaGetLastError(); \

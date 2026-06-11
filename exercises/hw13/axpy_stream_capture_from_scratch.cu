@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <cuda_runtime_api.h>
 
-// error checking macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
     do { \
         cudaError_t __err = cudaGetLastError(); \
@@ -16,7 +16,7 @@
 
 #define N 500000
 
-// Simple short kernels
+// 简单的短小核函数
 __global__
 void kernel_a(float * x, float * y){
   int idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -47,14 +47,14 @@ void kernel_d(float * x, float * y){
 
 int main(){
 
-// Set up and create events
+// 设置并创建事件
 cudaEvent_t event1;
 cudaEvent_t event2;
 
 cudaEventCreateWithFlags(&event1, cudaEventDisableTiming);
 cudaEventCreateWithFlags(&event2, cudaEventDisableTiming);
 
-// Set up and create streams
+// 设置并创建流
 const int num_streams = 2;
 
 cudaStream_t streams[num_streams];
@@ -63,7 +63,7 @@ for (int i = 0; i < num_streams; ++i){
     cudaStreamCreateWithFlags(&streams[i], cudaStreamNonBlocking);
 }
 
-// Set up and initialize host data
+// 设置并初始化主机端数据
 float* h_x;
 float* h_y;
 
@@ -77,7 +77,7 @@ for (int i = 0; i < N; ++i){
 }
 printf("\n");
 
-// Set up device data
+// 设置设备端数据
 float* d_x;
 float* d_y;
 
@@ -92,7 +92,7 @@ cudaCheckErrors("cudaMalloc failed");
 int threads = 512;
 int blocks = (N + (threads - 1) / threads);
 
-// Launching work
+// 启动工作负载
 for (int i = 0; i < 100; ++i){
     kernel_a<<<blocks, threads, 0, streams[0]>>>(d_x, d_y);
     cudaCheckErrors("Kernel a failed");
@@ -121,13 +121,13 @@ for (int i = 0; i < 100; ++i){
     cudaStreamSynchronize(streams[0]);
 }
 
-// Copy data back to host
+// 将数据复制回主机端
 cudaMemcpy(h_y, d_y, N, cudaMemcpyDeviceToHost);
 cudaCheckErrors("Finishing memcpy failed");
 
 cudaDeviceSynchronize();
 
-// Print out the first 25 values of h_y
+// 打印 h_y 的前 25 个值
 for (int i = 0; i < 25; ++i){
     printf("%2.0f ", h_y[i]);
 }

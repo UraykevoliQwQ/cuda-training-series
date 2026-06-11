@@ -12,22 +12,22 @@ __global__ void stencil_1d(int *in, int *out) {
     int gindex = threadIdx.x + blockIdx.x * blockDim.x;
     int lindex = threadIdx.x + RADIUS;
 
-    // Read input elements into shared memory
+    // 将输入元素读入共享内存
     temp[lindex] = in[gindex];
     if (threadIdx.x < RADIUS) {
       temp[lindex - RADIUS] = in[gindex - RADIUS];
       temp[lindex + BLOCK_SIZE] = in[gindex + BLOCK_SIZE];
     }
 
-    // Synchronize (ensure all the data is available)
+    // 同步（确保所有数据都已可用）
     __syncthreads();
 
-    // Apply the stencil
+    // 应用 stencil 计算
     int result = 0;
     for (int offset = -RADIUS; offset <= RADIUS; offset++)
       result += temp[lindex + offset];
 
-    // Store the result
+    // 存储结果
     out[gindex] = result;
 }
 
@@ -36,29 +36,29 @@ void fill_ints(int *x, int n) {
 }
 
 int main(void) {
-  int *in, *out; // host copies of a, b, c
-  int *d_in, *d_out; // device copies of a, b, c
+  int *in, *out; // a、b、c 的主机端副本
+  int *d_in, *d_out; // a、b、c 的设备端副本
   int size = (N + 2*RADIUS) * sizeof(int);
 
-  // Alloc space for host copies and setup values
+  // 为主机端副本分配空间并设置初值
   in = (int *)malloc(size); fill_ints(in, N + 2*RADIUS);
   out = (int *)malloc(size); fill_ints(out, N + 2*RADIUS);
 
-  // Alloc space for device copies
+  // 为设备端副本分配空间
   cudaMalloc((void **)&d_in, size);
   cudaMalloc((void **)&d_out, size);
 
-  // Copy to device
+  // 复制到设备端
   cudaMemcpy(d_in, in, size, cudaMemcpyHostToDevice);
   cudaMemcpy(d_out, out, size, cudaMemcpyHostToDevice);
 
-  // Launch stencil_1d() kernel on GPU
+  // 在 GPU 上启动 stencil_1d() 核函数
   stencil_1d<<<N/BLOCK_SIZE,BLOCK_SIZE>>>(d_in + RADIUS, d_out + RADIUS);
 
-  // Copy result back to host
+  // 将结果复制回主机端
   cudaMemcpy(out, d_out, size, cudaMemcpyDeviceToHost);
 
-  // Error Checking
+  // 错误检查
   for (int i = 0; i < N + 2*RADIUS; i++) {
     if (i<RADIUS || i>=N+RADIUS){
       if (out[i] != 1)
@@ -69,7 +69,7 @@ int main(void) {
     }
   }
 
-  // Cleanup
+  // 清理
   free(in); free(out);
   cudaFree(d_in); cudaFree(d_out);
   printf("Success!\n");

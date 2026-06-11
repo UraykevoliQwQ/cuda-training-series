@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-// error checking macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
     do { \
         cudaError_t __err = cudaGetLastError(); \
@@ -14,10 +14,10 @@
     } while (0)
 
 
-const size_t N = 8ULL*1024ULL*1024ULL;  // data size
-//const size_t N = 256*640; // data size
-const int BLOCK_SIZE = 256;  // CUDA maximum is 1024
-// naive atomic reduction kernel
+const size_t N = 8ULL*1024ULL*1024ULL;  // 数据大小
+//const size_t N = 256*640; // 数据大小
+const int BLOCK_SIZE = 256;  // CUDA 最大值为 1024
+// 朴素原子归约核函数
 __global__ void atomic_red(const float *gdata, float *out){
   size_t idx = threadIdx.x+blockDim.x*blockIdx.x;
   if (idx < N) atomicAdd(out, gdata[idx]);
@@ -29,14 +29,14 @@ __global__ void reduce(float *gdata, float *out){
      sdata[tid] = 0.0f;
      size_t idx = threadIdx.x+blockDim.x*blockIdx.x;
 
-     while (idx < N) {  // grid stride loop to load data
+     while (idx < N) {  // 使用网格步长循环加载数据
         sdata[tid] += gdata[idx];
         idx += gridDim.x*blockDim.x;  
         }
 
      for (unsigned int s=blockDim.x/2; s>0; s>>=1) {
         __syncthreads();
-        if (tid < s)  // parallel sweep reduction
+        if (tid < s)  // 并行扫描式归约
             sdata[tid] += sdata[tid + s];
         }
      if (tid == 0) out[blockIdx.x] = sdata[0];
@@ -48,14 +48,14 @@ __global__ void reduce(float *gdata, float *out){
      sdata[tid] = 0.0f;
      size_t idx = threadIdx.x+blockDim.x*blockIdx.x;
 
-     while (idx < N) {  // grid stride loop to load data
+     while (idx < N) {  // 使用网格步长循环加载数据
         sdata[tid] += gdata[idx];
         idx += gridDim.x*blockDim.x;  
         }
 
      for (unsigned int s=blockDim.x/2; s>0; s>>=1) {
         __syncthreads();
-        if (tid < s)  // parallel sweep reduction
+        if (tid < s)  // 并行扫描式归约
             sdata[tid] += sdata[tid + s];
         }
      if (tid == 0) atomicAdd(out, sdata[0]);
@@ -70,23 +70,23 @@ __global__ void reduce_ws(float *gdata, float *out){
      unsigned mask = 0xFFFFFFFFU;
      int lane = threadIdx.x % warpSize;
      int warpID = threadIdx.x / warpSize;
-     while (idx < N) {  // grid stride loop to load 
+     while (idx < N) {  // 使用网格步长循环加载
         val += gdata[idx];
         idx += gridDim.x*blockDim.x;  
         }
 
- // 1st warp-shuffle reduction
+ // 第 1 次 warp shuffle 归约
     for (int offset = warpSize/2; offset > 0; offset >>= 1) 
        val += __shfl_down_sync(mask, val, offset);
     if (lane == 0) sdata[warpID] = val;
-   __syncthreads(); // put warp results in shared mem
+   __syncthreads(); // 将 warp 结果放入共享内存
 
-// hereafter, just warp 0
+// 之后只使用 warp 0
     if (warpID == 0){
- // reload val from shared mem if warp existed
+ // 如果对应 warp 存在，则从共享内存重新加载 val
        val = (tid < blockDim.x/warpSize)?sdata[lane]:0;
 
- // final warp-shuffle reduction
+ // 最终 warp shuffle 归约
        for (int offset = warpSize/2; offset > 0; offset >>= 1) 
           val += __shfl_down_sync(mask, val, offset);
 
@@ -100,50 +100,50 @@ __global__ void reduce_ws(float *gdata, float *out){
 int main(){
 
   float *h_A, *h_sum, *d_A, *d_sum;
-  h_A = new float[N];  // allocate space for data in host memory
+  h_A = new float[N];  // 在主机内存中为数据分配空间
   h_sum = new float;
-  for (int i = 0; i < N; i++)  // initialize matrix in host memory
+  for (int i = 0; i < N; i++)  // 在主机内存中初始化矩阵
     h_A[i] = 1.0f;
-  cudaMalloc(&d_A, N*sizeof(float));  // allocate device space for A
-  cudaMalloc(&d_sum, sizeof(float));  // allocate device space for sum
-  cudaCheckErrors("cudaMalloc failure"); // error checking
-  // copy matrix A to device:
+  cudaMalloc(&d_A, N*sizeof(float));  // 为 A 分配设备端空间
+  cudaMalloc(&d_sum, sizeof(float));  // 为 sum 分配设备端空间
+  cudaCheckErrors("cudaMalloc failure"); // 错误检查
+  // 将矩阵 A 复制到设备端：
   cudaMemcpy(d_A, h_A, N*sizeof(float), cudaMemcpyHostToDevice);
   cudaCheckErrors("cudaMemcpy H2D failure");
   cudaMemset(d_sum, 0, sizeof(float));
   cudaCheckErrors("cudaMemset failure");
-  //cuda processing sequence step 1 is complete
+  //CUDA 处理序列第 1 步完成
   atomic_red<<<(N+BLOCK_SIZE-1)/BLOCK_SIZE, BLOCK_SIZE>>>(d_A, d_sum);
   cudaCheckErrors("atomic reduction kernel launch failure");
-  //cuda processing sequence step 2 is complete
-  // copy vector sums from device to host:
+  //CUDA 处理序列第 2 步完成
+  // 将向量 sums 从设备端复制回主机端：
   cudaMemcpy(h_sum, d_sum, sizeof(float), cudaMemcpyDeviceToHost);
-  //cuda processing sequence step 3 is complete
+  //CUDA 处理序列第 3 步完成
   cudaCheckErrors("atomic reduction kernel execution failure or cudaMemcpy H2D failure");
   if (*h_sum != (float)N) {printf("atomic sum reduction incorrect!\n"); return -1;}
   printf("atomic sum reduction correct!\n");
   const int blocks = 640;
   cudaMemset(d_sum, 0, sizeof(float));
   cudaCheckErrors("cudaMemset failure");
-  //cuda processing sequence step 1 is complete
+  //CUDA 处理序列第 1 步完成
   reduce_a<<<blocks, BLOCK_SIZE>>>(d_A, d_sum);
   cudaCheckErrors("reduction w/atomic kernel launch failure");
-  //cuda processing sequence step 2 is complete
-  // copy vector sums from device to host:
+  //CUDA 处理序列第 2 步完成
+  // 将向量 sums 从设备端复制回主机端：
   cudaMemcpy(h_sum, d_sum, sizeof(float), cudaMemcpyDeviceToHost);
-  //cuda processing sequence step 3 is complete
+  //CUDA 处理序列第 3 步完成
   cudaCheckErrors("reduction w/atomic kernel execution failure or cudaMemcpy H2D failure");
   if (*h_sum != (float)N) {printf("reduction w/atomic sum incorrect!\n"); return -1;}
   printf("reduction w/atomic sum correct!\n");
   cudaMemset(d_sum, 0, sizeof(float));
   cudaCheckErrors("cudaMemset failure");
-  //cuda processing sequence step 1 is complete
+  //CUDA 处理序列第 1 步完成
   reduce_ws<<<blocks, BLOCK_SIZE>>>(d_A, d_sum);
   cudaCheckErrors("reduction warp shuffle kernel launch failure");
-  //cuda processing sequence step 2 is complete
-  // copy vector sums from device to host:
+  //CUDA 处理序列第 2 步完成
+  // 将向量 sums 从设备端复制回主机端：
   cudaMemcpy(h_sum, d_sum, sizeof(float), cudaMemcpyDeviceToHost);
-  //cuda processing sequence step 3 is complete
+  //CUDA 处理序列第 3 步完成
   cudaCheckErrors("reduction warp shuffle kernel execution failure or cudaMemcpy H2D failure");
   if (*h_sum != (float)N) {printf("reduction warp shuffle sum incorrect!\n"); return -1;}
   printf("reduction warp shuffle sum correct!\n");

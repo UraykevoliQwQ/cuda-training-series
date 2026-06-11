@@ -4,14 +4,14 @@
 #include <sys/time.h>
 #include <stdio.h>
 
-// modifiable
+// 可修改
 typedef float ft;
 const int chunks = 64;
 const size_t ds = 1024*1024*chunks;
 const int count = 22;
 const int num_streams = 8;
 
-// not modifiable
+// 不可修改
 const float sqrt_2PIf = 2.5066282747946493232942230134974f;
 const double sqrt_2PI = 2.5066282747946493232942230134974;
 __device__ float gpdf(float val, float sigma) {
@@ -22,7 +22,7 @@ __device__ double gpdf(double val, double sigma) {
   return exp(-0.5 * val * val) / (sigma * sqrt_2PI);
 }
 
-// compute average gaussian pdf value over a window around each point
+// 计算每个点周围窗口内的高斯 PDF 平均值
 __global__ void gaussian_pdf(const ft * __restrict__ x, ft * __restrict__ y, const ft mean, const ft sigma, const int n) {
   int idx = threadIdx.x + blockDim.x * blockIdx.x;
   if (idx < n) {
@@ -37,7 +37,7 @@ __global__ void gaussian_pdf(const ft * __restrict__ x, ft * __restrict__ y, con
   }
 }
 
-// error check macro
+// 错误检查宏
 #define cudaCheckErrors(msg) \
   do { \
     cudaError_t __err = cudaGetLastError(); \
@@ -50,7 +50,7 @@ __global__ void gaussian_pdf(const ft * __restrict__ x, ft * __restrict__ y, con
     } \
   } while (0)
 
-// host-based timing
+// 基于主机端的计时
 #define USECPSEC 1000000ULL
 
 unsigned long long dtime_usec(unsigned long long start) {
@@ -74,7 +74,7 @@ int main() {
   }
   cudaCheckErrors("stream creation error");
 
-  gaussian_pdf<<<(ds + 255) / 256, 256>>>(d_x, d_y, 0.0, 1.0, ds); // warm-up
+  gaussian_pdf<<<(ds + 255) / 256, 256>>>(d_x, d_y, 0.0, 1.0, ds); // 预热
 
   for (size_t i = 0; i < ds; i++) {
     h_x[i] = rand() / (ft)RAND_MAX;
@@ -96,7 +96,7 @@ int main() {
 
   unsigned long long et = dtime_usec(0);
 
-  for (int i = 0; i < chunks; i++) { //depth-first launch
+  for (int i = 0; i < chunks; i++) { //深度优先启动
     cudaMemcpyAsync(d_x + FIXME, h_x + FIXME, (FIXME) * sizeof(ft), cudaMemcpyHostToDevice, streams[FIXME]);
     gaussian_pdf<<<((FIXME) + 255) / 256, 256, 0, streams[FIXME]>>>(d_x + FIXME, d_y + FIXME, 0.0, 1.0, FIXME);
     cudaMemcpyAsync(h_y + i * (ds / chunks), d_y + i * (ds / chunks), (ds / chunks) * sizeof(ft), cudaMemcpyDeviceToHost, streams[i % num_streams]);

@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 #endif
 
-    // Total problem size
+    // 总问题规模
     size_t N = 1024 * 1024 * 1024;
 
     if (argc >= 2) {
@@ -29,20 +29,20 @@ int main(int argc, char** argv) {
     }
 
 #ifdef NO_MPI
-    // If not using MPI, specify at command line how many "ranks" there are
+    // 如果不使用 MPI，则通过命令行指定有多少个“rank”
     int num_ranks = 1;
     if (argc >= 3) {
         num_ranks = atoi(argv[2]);
     }
 #endif
 
-    // Problem size per rank (assumes divisibility of N)
+    // 每个 rank 的问题规模（假设 N 可整除）
     size_t N_per_rank = N / num_ranks;
 
     double* x;
     cudaMalloc((void**) &x, N_per_rank * sizeof(double));
 
-    // Number of repetitions
+    // 重复次数
 
     const int num_reps = 1000;
 
