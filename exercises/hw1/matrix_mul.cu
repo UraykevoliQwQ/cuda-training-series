@@ -31,7 +31,7 @@ __global__ void mmul(const float *A, const float *B, float *C, int ds) {
   if ((idx < ds) && (idy < ds)){
     float temp = 0;
     for (int i = 0; i < ds; i++)
-      temp += A[FIXME*ds+i] * B[i*ds+FIXME];   // 行与列的点积
+      temp += A[idy*ds+i] * B[i*ds+idx];   // 行与列的点积
     C[idy*ds+idx] = temp;
   }
 }
