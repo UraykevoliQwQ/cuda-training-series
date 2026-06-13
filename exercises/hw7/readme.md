@@ -1,96 +1,96 @@
-## **1. Investigating Copy-Compute Overlap**
+## **1. 研究复制与计算重叠**
 
-For your first task, you are given a code that performs a silly computation element-wise on a vector. You can initially compile, run and profile the code if you wish. 
+第一个任务提供了一段代码，它对向量中的每个元素执行一个简单计算。你可以先编译、运行并分析原始代码。
 
-compile it using the following:
+使用以下命令编译：
 
 ```
 module load cuda
 nvcc -o overlap overlap.cu
 ```
 
-The module load command selects a CUDA compiler for your use. The module load command only needs to be done once per session/login. *nvcc* is the CUDA compiler invocation command. The syntax is generally similar to gcc/g++.
+`module load` 命令用于选择 CUDA 编译器。每次会话或登录只需执行一次。*nvcc* 是调用 CUDA 编译器的命令，其语法通常与 gcc/g++ 类似。
 
-To run your code, we will use an LSF command:
+使用以下 LSF 命令运行代码：
 
 ```
 bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1 ./overlap
 ```
 
-Alternatively, you may want to create an alias for your bsub command in order to make subsequent runs easier:
+也可以为 bsub 命令创建别名，以便后续运行：
 
 ```
 alias lsfrun='bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1'
 lsfrun ./overlap
 ```
 
-To run your code at NERSC on Cori, we can use Slurm:
+在 NERSC 的 Cori 上，可以使用 Slurm：
 
 ```
 module load esslurm
 srun -C gpu -N 1 -n 1 -t 10 -A m3502 -G 1 -c 10 ./overlap
 ```
 
-Allocation `m3502` is a custom allocation set up on Cori for this training series, and should be available to participants who registered in advance. If you cannot submit using this allocation, but already have access to another allocation that grants access to the Cori GPU nodes (such as m1759), you may use that instead.
+`m3502` 是专为 Cori 上的本培训系列设置的资源配额，提前注册的参与者应当可以使用。如果无法使用此配额提交作业，但你已经拥有其他可访问 Cori GPU 节点的配额（例如 m1759），也可以改用该配额。
 
-If you prefer, you can instead reserve a GPU in an interactive session, and then run an executable any number of times while the Slurm allocation is active (this is recommended if there are enough available nodes):
+如果愿意，也可以在交互式会话中预留一块 GPU，并在 Slurm 资源分配有效期间多次运行可执行文件（如果有足够的可用节点，推荐采用这种方式）：
 
 ```
 salloc -C gpu -N 1 -t 60 -A m3502 -G 1 -c 10
 srun -n 1 ./overlap
 ```
 
-Note that you only need to `module load esslurm` once per login session; this is what enables you to submit to the Cori GPU nodes.
+每次登录会话只需执行一次 `module load esslurm`；该命令使你能够向 Cori GPU 节点提交作业。
 
-In this case, the output will show the elapsed time of the non-overlapped version of the code. This code copies the entire vector to the device, then launches the processing kernel, then copies the entire vector back to the host.
+在这种情况下，输出会显示代码非重叠版本的耗时。该版本先将整个向量复制到设备，再启动处理核函数，最后将整个向量复制回主机。
 
-You can also run this code with Nsight Systems if you wish:
+也可以使用 Nsight Systems 运行该代码：
 
 ```
 module load nsight-systems
 lsfrun nsys profile -o <destination_dir>/overlap.qdrep ./overlap
 ```
 
-Note that you will have to copy this file over to your local machine and install Nsight Systems for visualization. You can download Nsight Systems here:
+请注意，需要将此文件复制到本地计算机，并安装 Nsight Systems 才能进行可视化。可在此处下载 Nsight Systems：
 https://developer.nvidia.com/nsight-systems
 
-This visual output should show you the sequence of operations (*cudaMemcpy* Host to Device, kernel call, and *cudaMemcpy* Device To Host). Note that there is an initial "warm-up" run of the kernel; disregard this. You should be able to witness that the start and duration of each operating is indicating that there is no overlap.
+可视化输出应显示操作序列：*cudaMemcpy*（主机到设备）、核函数调用和 *cudaMemcpy*（设备到主机）。请注意，开头会有一次核函数“预热”运行，可忽略。各操作的开始时间和持续时间应能表明它们之间没有重叠。
 
-Your objective is to create a fully overlapped version of the code. Use your knowledge of streams to create a version of the code that will issue the work in chunks, and for each chunk perform the copy to device, kernel launch, and copy to host in a single stream, then modifying the stream for the next chunk. The work has been started for you in the section of code after the #ifdef statement. Look for the FIXME tokens there, and replace each FIXME with appropriate code to complete this task.
+你的目标是创建代码的完全重叠版本。利用流的知识，将工作划分成若干分块；对于每个分块，在同一个流中依次执行复制到设备、启动核函数和复制回主机，然后为下一个分块切换所用的流。`#ifdef` 语句后的代码已经提供了起始框架。找到其中的 FIXME 标记，并用适当代码替换，以完成任务。
 
-When you have something ready to test, compile with this additional switch:
+准备好测试后，使用以下额外开关编译：
 
 ```
 nvcc -o overlap overlap.cu -DUSE_STREAMS
 ```
 
-If you run the code, there will be a verification check performed, to make sure you have processed the entire vector correctly, in chunks. If you pass the verification test, the program will display the elapsed time of the streamed version.  You should be able to get to at least 2X faster (i.e. half the duration) of the non-streamed version. If you wish, you can also run this code with the Nsight Systems profiler using the above given command. This will generate a visual output, and you should be able to confirm that there is indeed overlap of operations by zooming in on the portion of execution related to kernel launches. You can see the non-overlapped version run, followed by the overlapped version. Not only should the overlapped version be faster, you should see an interleaving of computation and data transfer operations.
+运行代码时会执行验证检查，确保整个向量都已按分块正确处理。如果通过验证，程序将显示流版本的耗时。其速度应至少提升 2 倍，即耗时约为非流版本的一半。也可以使用上述命令通过 Nsight Systems 分析代码。生成的可视化输出应能在放大核函数启动相关部分后确认操作确实发生了重叠。你会先看到非重叠版本运行，随后是重叠版本。重叠版本不仅应更快，还应显示计算与数据传输操作交错执行。
 
-If you need help, refer to *overlap_solution.cu*.
+如需帮助，请参考 *overlap_solution.cu*。
 
-## **2. Simple Multi-GPU**
+## **2. 简单的多 GPU**
 
-In this exercise, you are given a very simple code that performs 4 kernel calls in sequence on a single GPU. You're welcome to compile and run the code as-is. It will display an overall duration for the time taken to complete the 4 kernel calls. Your task is to modify this code to run each kernel on a separate GPU (each node on Summit actually has 6 GPUs). After completion, confirm that the execution time is substantially reduced.
+本练习提供了一段非常简单的代码，它在单块 GPU 上依次执行 4 次核函数调用。你可以先直接编译并运行代码，程序会显示完成 4 次核函数调用的总耗时。你的任务是修改代码，让每个核函数分别在不同 GPU 上运行（Summit 的每个节点实际上有 6 块 GPU）。完成后，确认执行时间显著减少。
 
-You can compile the code with:
+使用以下命令编译：
 
 ```
 nvcc -o multi multi.cu
 ```
 
-You can run the code on Summit with:
+在 Summit 上使用以下命令运行：
 
 ```
 alias lsfrun='bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g4'
 lsfrun ./multi
 ```
 
-On Cori, make sure that you ask for an allocation with 4 GPUs, e.g.
+在 Cori 上，请确保申请包含 4 块 GPU 的资源，例如：
 
 ```
 srun -C gpu -N 1 -n 1 -t 10 -A m3502 -G 4 -c 40 ./multi
 ```
 
-**HINT**: This exercise might be simpler than you think. You won't need to do anything with streams at all for this. You'll only need to make a simple modification to each of the for-loops.
+**提示**：本练习可能比想象中简单。完全不需要使用流，只需对每个 for 循环做一个简单修改。
 
-If you need help, refer to *multi_solution.cu*.
+如需帮助，请参考 *multi_solution.cu*。

@@ -1,62 +1,62 @@
-# **1. Exploring Threadblock-Level Groups**
+# **1. 探索线程块级组**
 
-## **1a. Creating Groups**
+## **1a. 创建组**
 
-First, you should take the *task1.cu* code, and complete the sections indicated by **FIXME** to provide a proper thread-block group, and assign that group to the group being used for printout purposes.  You should only need to modify the 2 lines containing **FIXME** for this first step.
+首先，使用 *task1.cu* 代码补全标有 **FIXME** 的部分，创建正确的线程块组，并将其赋给用于输出的组。在第一步中，只需修改包含 **FIXME** 的两行。
 
-You can compile your code as follows:
+使用以下命令编译：
 
 ```bash
 module load cuda
 nvcc -arch=sm_70 -o task1 task1.cu -std=c++11
 ```
 
-The module load command selects a CUDA compiler for your use. The module load command only needs to be done once per session/login. *nvcc* is the CUDA compiler invocation command. The syntax is generally similar to gcc/g++. Note that because we're using C++11 (which is required for cooperative groups) we need a sufficiently modern compiler (gcc >= 5 should be sufficient). If you're on Summit, make sure to do `module load gcc` because the system default gcc is not recent enough.
+`module load` 命令用于选择 CUDA 编译器。每次会话或登录只需执行一次。*nvcc* 是调用 CUDA 编译器的命令，其语法通常与 gcc/g++ 类似。请注意，由于使用协作组需要 C++11，因此需要足够现代的编译器（gcc >= 5 即可）。如果使用 Summit，请务必执行 `module load gcc`，因为系统默认 gcc 版本不够新。
 
-To run your code, we will use an LSF command:
+使用以下 LSF 命令运行代码：
 
 ```bash
 bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1 ./task1
 ```
 
-Alternatively, you may want to create an alias for your bsub command in order to make subsequent runs easier:
+也可以为 bsub 命令创建别名，以便后续运行：
 
 ```bash
 alias lsfrun='bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1'
 lsfrun ./task1
 ```
 
-To run your code at NERSC on Cori, we can use Slurm:
+在 NERSC 的 Cori 上，可以使用 Slurm：
 
 ```bash
 module load esslurm
 srun -C gpu -N 1 -n 1 -t 10 -A m3502 --gres=gpu:1 -c 10 ./task1
 ```
 
-Allocation `m3502` is a custom allocation set up on Cori for this training series, and should be available to participants who registered in advance. If you cannot submit using this allocation, but already have access to another allocation that grants access to the Cori GPU nodes (such as m1759), you may use that instead.
+`m3502` 是专为 Cori 上的本培训系列设置的资源配额，提前注册的参与者应当可以使用。如果无法使用此配额提交作业，但你已经拥有其他可访问 Cori GPU 节点的配额（例如 m1759），也可以改用该配额。
 
-If you prefer, you can instead reserve a GPU in an interactive session, and then run an executable any number of times while the Slurm allocation is active (this is recommended if there are enough available nodes):
+如果愿意，也可以在交互式会话中预留一块 GPU，并在 Slurm 资源分配有效期间多次运行可执行文件（如果有足够的可用节点，推荐采用这种方式）：
 
 ```bash
 salloc -C gpu -N 1 -t 60 -A m3502 --gres=gpu:1 -c 10
 srun -n 1 ./task1
 ```
 
-Note that you only need to `module load esslurm` once per login session; this is what enables you to submit to the Cori GPU nodes.
+每次登录会话只需执行一次 `module load esslurm`；该命令使你能够向 Cori GPU 节点提交作业。
 
-Correct output should look like this:
+正确输出应类似：
 
 ```bash
 group partial sum: 256
 ```
 
-If you need help, refer to the *task1_solution1.cu* file. (which contains the solution for tasks 1a, 1b, and 1c)
+如需帮助，请参考 *task1_solution1.cu*，其中包含任务 1a、1b 和 1c 的解决方案。
 
-## **1b. Partitioning Groups**
+## **1b. 划分组**
 
-Next uncomment the next line that starts with the auto keyword, and complete that line to use the previously created thread block group and subdivide it into a set of 32-thread partitions, using the dynamic (runtime) partitioning method.
+接下来，取消注释下一行以 auto 关键字开头的代码，并补全该行。使用此前创建的线程块组，通过动态（运行时）划分方法将其细分为若干个包含 32 个线程的分区。
 
-Compile and run the code as above.  correct output should look like:
+按上述方式编译并运行代码。正确输出应类似：
 
 ```bash
 group partial sum: 32
@@ -69,11 +69,11 @@ group partial sum: 32
 group partial sum: 32
 ```
 
-## **1c. Third Group Creation/Decomposition**
+## **1c. 第三次组创建/分解**
 
-Now perform the 3rd group creation/decomposition.
+现在执行第三次组创建/分解。
 
-Compile and run the code as above.  Correct output should look like:
+按上述方式编译并运行代码。正确输出应类似：
 
 ```bash
 group partial sum: 16
@@ -94,30 +94,30 @@ group partial sum: 16
 group partial sum: 16
 ```
 
-# **2. Exploring Grid-Wide Sync**
+# **2. 探索网格级同步**
 
-One of the motivations suggested for a grid-wide sync is to combine algorithm phases which need to be completed in sequence, and would normally be realized with separate CUDA kernel calls.  In this case, the kernel launch boundary provides an implicit/effective grid-wide sync.  However cooperative groups provides the possibility of a grid wide sync directly in kernel code, rather than at a kernel launch boundary.
+采用网格级同步的一个动机，是合并那些必须按顺序完成、通常需要通过多次独立 CUDA 核函数调用实现的算法阶段。在这种情况下，核函数启动边界提供了隐式或等效的网格级同步。然而，协作组允许直接在核函数代码中执行网格级同步，而不必依赖核函数启动边界。
 
-One such algorithm would be stream compaction.  Stream compaction is used in many places, and fundamentally seeks to reduce the length of a data stream using a particular removal heuristic or predicate test.  For example, if we had the following data stream:
+流压缩就是此类算法之一。流压缩应用广泛，其基本目标是根据特定的删除规则或谓词测试来缩短数据流。例如，若有以下数据流：
 
 ```bash
 3 4 3 7 0 5 0 8 0 0 0 4
 ```
 
-we could do stream compaction by removing the zeroes, ending up with:
+删除其中的零即可完成流压缩，得到：
 
 ```bash
 3 4 3 7 5 8 4
 ```
 
-Like many reduction type algorithms (the output here is potentially much smaller than the input), we can easily imagine how to do this in a serial fashion, but a fast parallel stream compaction requires some additional thought.  A common approach is to use a prefix sum.  A prefix sum is a data set, where each data item in the set represents the sum of the previous input elements from the beginning of the input to that point.  We can use a prefix sum to help parallelize our stream compaction.  We start by creating an array of ones and zeroes, where there is a one corresponding to the element we want to keep, and zero for the element we want to discard:
+与许多归约类算法一样（此处输出可能比输入小得多），很容易想象串行实现方式，但快速的并行流压缩需要进一步思考。一种常见方法是使用前缀和。前缀和数据集中的每个元素，表示从输入开头到当前位置之前所有输入元素的和。我们可以使用前缀和辅助并行化流压缩。首先创建一个由 1 和 0 组成的数组：要保留的元素对应 1，要丢弃的元素对应 0：
 
 ```bash
 3 4 3 7 0 5 0 8 0 0 0 4 (input data)
 1 1 1 1 0 1 0 1 0 0 0 1 (filtering of input)
 ```
 
-We then do an exclusive prefix sum on that filtered array (exclusive means only the elements "to the left" are included in the sum.  The element at that position is excluded).
+然后对过滤数组执行排他前缀和。排他意味着求和只包含当前位置“左侧”的元素，不包含当前位置本身。
 
 ```bash
 3 4 3 7 0 5 0 8 0 0 0 4 (input data)
@@ -125,28 +125,28 @@ We then do an exclusive prefix sum on that filtered array (exclusive means only 
 0 1 2 3 4 4 5 5 6 6 6 6 (exclusive prefix sum of filtered data)
 ```
 
-This prefix sum now contains the index into the output array that the input position should be copied to.  We only copy a position from input to output if the corresponding filter element is not zero.  This demonstrates how to use a prefix sum to assist with a stream compaction, but doesn't identify how to do the prefix sum in parallel, efficiently.  A full treatment here is beyond the scope of this document, but you can refer here for a good treatise: https://people.eecs.berkeley.edu/~driscoll/cs267/papers/gpugems3_ch39.html  Some key takeaways are that a prefix sum has a sweeping operation, not unlike the sweeping operation that is successively performed in a parallel reduction, but there are key differences.  Two of these key differences are that the sweep is from "left" to "right" in the prefix sum whereas it is usually from right to left  in a typical parallel reduction, and also that the break points (i.e. the division of threads participating at each sweep phase) is different.
+此前缀和现在包含每个输入位置应复制到输出数组中的索引。只有对应过滤元素非零时，才会将输入位置复制到输出。以上说明了如何用前缀和辅助流压缩，但尚未说明如何高效并行计算前缀和。完整介绍超出了本文档范围，可参考：https://people.eecs.berkeley.edu/~driscoll/cs267/papers/gpugems3_ch39.html。需要注意的是，前缀和也包含扫描操作，与并行归约中连续执行的扫描操作类似，但二者存在关键差异。其中两项是：前缀和中的扫描从“左”到“右”，典型并行归约通常从右到左；各扫描阶段参与线程的分界点也不同。
 
-When parallelizing a prefix sum, we often require multiple phases, for example a thread-block level scan (prefix-sum) operation, followed by another operation to "fix up" the threadblock level results based on the data from other ("previous") thread blocks.  These phases may require a grid-wide sync, and  typical scan from a library such as thrust will use multiple kernel calls.   Let's see if we can do it in a single kernel call. You won't have to write any scan code, other than inserting appropriate cooperative group sync points.  We need sync points at the threadblock leve (based on the threadblock level group created for you) and also at the grid level.
+并行计算前缀和通常需要多个阶段，例如先执行线程块级扫描（前缀和），再根据其他“先前”线程块的数据修正线程块级结果。这些阶段可能需要网格级同步，而 thrust 等库中的典型扫描会使用多次核函数调用。下面尝试通过一次核函数调用完成它。除插入适当的协作组同步点外，不需要编写任何扫描代码。我们既需要线程块级同步点（基于已创建的线程块级组），也需要网格级同步点。
 
-Start with the *task2.cu* code, and perform 2 things:
+从 *task2.cu* 代码开始，完成两项工作：
 
-- Modify the **FIXME** statements in the kernel to insert appropriate sync operations as requested, based on the two group types created at the top of the kernel.  Only one grid-wide sync point is needed, the others are all thread-block-level sync points.
-- In the host code, modify the **FIXME** statements to do a proper cooperative launch.  The launch function is already provided, you just need to fill in the remaining 4 arguments.  Refer to the *task2_solution.cu* file for help, or refer to the cuda runtime API documentation for the launch function: https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION_1g504b94170f83285c71031be6d5d15f73  
+- 修改核函数中的 **FIXME** 语句，按要求基于核函数顶部创建的两种组插入适当的同步操作。只需要一个网格级同步点，其余均为线程块级同步点。
+- 修改主机代码中的 **FIXME** 语句，执行正确的协作式启动。启动函数已经提供，只需填写剩余 4 个参数。可参考 *task2_solution.cu*，或查看该启动函数的 CUDA 运行时 API 文档：https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION_1g504b94170f83285c71031be6d5d15f73
 
-Once you have made the above modification, compile your code as follows:
+完成修改后，使用以下命令编译：
 
 ```bash
 nvcc -arch=sm_70 -o task2 task2.cu -rdc=true -std=c++11
 ```
 
-and run it as follows:
+并按如下方式运行：
 
 ```bash
 lsfrun ./task2
 ```
 
-Correct output should be simply:
+正确输出应仅包含：
 
 ```bash
 number of SMs = 80
@@ -155,33 +155,33 @@ kernel time: 0.043872ms
 thrust time: 0.083200ms
 ```
 
-(The above is representative, if you run it on a GPU that is different than Tesla V100, you may see different data, but should only see the above 4 lines)
+（以上数值仅供参考。如果使用的 GPU 不是 Tesla V100，数据可能不同，但仍应只看到以上 4 行。）
 
-The above informational data contains "*occupancy*" information produced by the occupancy API.  Note that we are able to put 8 of these 256 thread threadblocks on a single SM, for the full maximum theoretical 2048 thread complement per SM. This is 100% occupancy (the kernel is fairly simple and low in resource utilization/requirements).
+上述信息包含由占用率 API 生成的“占用率”数据。可以看到，单个 SM 能够容纳 8 个各含 256 个线程的线程块，达到每个 SM 理论上限 2048 个线程，即 100% 占用率。该核函数相当简单，资源使用量和需求都很低。
 
-The code has silent validation built in, so no actual results are printed, other than the above informational data.  If you got a "*mismatch*" message, something is wrong with your implementation.
+代码内置了静默验证，因此除上述信息外不会打印实际结果。如果出现 *mismatch* 消息，则实现存在问题。
 
-Optional:
+可选任务：
 
-This task2 code compares the operation to an equivalent operation in thrust.  For this trivially small data set size, our monolithic kernel seems to be faster than thrust.  Run this small data set size using the nsight-compute profiler to confirm for yourself that thrust is actually doing 2 kernel calls to solve this problem:
+task2 代码会将该操作与 thrust 中的等效操作进行比较。对于这个非常小的数据集，单体核函数看起来比 thrust 更快。使用 nsight-compute 分析该小数据集，确认 thrust 实际上通过 2 次核函数调用解决此问题：
 
 ```bash
 module load nsight-compute
 lsfrun nv-nsight-cu-cli ./task2
 ```
 
-Now make the data set larger.  A reasonable upper limit might be 32M elements.  Make sure to chose a number that is divisble by 256, the threadblock size. For example, change:
+现在增大数据集，合理的上限可以是 32M 个元素。请确保选择能被线程块大小 256 整除的数。例如，将：
 
 ```cpp
 const int test_dsize = 256;
 ```
 
-to something like:
+改为：
 
 ```cpp
 const int test_dsize = 1048576*16;
 ```
 
-and recompile and rerun the code.  Now which is faster, thrust or our naive code?
+然后重新编译并运行代码。现在 thrust 和朴素代码哪个更快？
 
-Takeaway: don't write your own code if you can find a high-quality library implementation.  This is especially true for more complex algorithms like sorting, prefix sums, and matrix multiply.
+结论：如果能找到高质量的库实现，就不要自行编写代码。对于排序、前缀和及矩阵乘法等更复杂的算法，这一点尤其重要。

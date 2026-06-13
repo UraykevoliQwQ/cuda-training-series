@@ -1,4 +1,5 @@
-# CUDA Training Resource
-The materials in this repository accompany the CUDA Training Series presented at ORNL and NERSC.
+# CUDA 培训资源
 
-You can find the slides and presentation recordings at https://www.olcf.ornl.gov/cuda-training-series/
+本仓库中的材料配套用于 ORNL 和 NERSC 举办的 CUDA 培训系列。
+
+幻灯片和演讲录像可在此处查看：https://www.olcf.ornl.gov/cuda-training-series/

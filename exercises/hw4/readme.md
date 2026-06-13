@@ -1,91 +1,89 @@
-## **1. Matrix Row/Column Sums**
+## **1. 矩阵行和与列和**
 
-Your first task is to create a simple matrix row and column sum application in CUDA. The code skeleton is already given to you in *matrix_sums.cu*. Edit that file, paying attention to the FIXME locations, so that the output when run is like this:
+第一个任务是使用 CUDA 创建一个简单的矩阵行求和与列求和应用程序。代码框架已在 *matrix_sums.cu* 中提供。请编辑该文件，重点关注标有 FIXME 的位置，使程序运行时输出类似：
 
 ```
 row sums correct!
 column sums correct!
 ```
 
-After editing the code, compile it using the following:
+编辑代码后，使用以下命令进行编译：
 
 ```
 module load cuda
 nvcc -o matrix_sums matrix_sums.cu
 ```
 
-The module load command selects a CUDA compiler for your use. The module load command only needs to be done once per session/login. *nvcc* is the CUDA compiler invocation command. The syntax is generally similar to gcc/g++.
+`module load` 命令用于选择 CUDA 编译器。每次会话或登录只需执行一次。*nvcc* 是调用 CUDA 编译器的命令，其语法通常与 gcc/g++ 类似。
 
-To run your code, we will use an LSF command:
+使用以下 LSF 命令运行代码：
 
 ```
 bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1 ./matrix_sums
 ```
 
-Alternatively, you may want to create an alias for your bsub command in order to make subsequent runs easier:
+也可以为 bsub 命令创建别名，以便后续运行：
 
 ```
 alias lsfrun='bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1'
 lsfrun ./matrix_sums
 ```
 
-To run your code at NERSC on Cori, we can use Slurm:
+在 NERSC 的 Cori 上，可以使用 Slurm：
 
 ```
 module load esslurm
 srun -C gpu -N 1 -n 1 -t 10 -A m3502 --reservation cuda_training --gres=gpu:1 -c 10 ./matrix_sums
 ```
 
-Allocation `m3502` is a custom allocation set up on Cori for this training series, and should be available to participants who registered in advance. If you cannot submit using this allocation, but already have access to another allocation that grants access to the Cori GPU nodes (such as m1759), you may use that instead.
+`m3502` 是专为 Cori 上的本培训系列设置的资源配额，提前注册的参与者应当可以使用。如果无法使用此配额提交作业，但你已经拥有其他可访问 Cori GPU 节点的配额（例如 m1759），也可以改用该配额。
 
-If you prefer, you can instead reserve a GPU in an interactive session, and then run an executable any number of times while the Slurm allocation is active (this is recommended if there are enough available nodes):
+如果愿意，也可以在交互式会话中预留一块 GPU，并在 Slurm 资源分配有效期间多次运行可执行文件（如果有足够的可用节点，推荐采用这种方式）：
 
 ```
 salloc -C gpu -N 1 -t 60 -A m3502 --reservation cuda_training --gres=gpu:1 -c 10
 srun -n 1 ./matrix_sums
 ```
 
-Note that you only need to `module load esslurm` once per login session; this is what enables you to submit to the Cori GPU nodes.
+每次登录会话只需执行一次 `module load esslurm`；该命令使你能够向 Cori GPU 节点提交作业。
 
+如果遇到困难，可以查看 *matrix_sums_solution.cu* 中的完整示例。
 
-If you have trouble, you can look at *matrix_sums_solution.cu* for a complete example.
+## **2. 性能分析**
 
-## **2. Profiling**
+下面引入一个新工具：性能分析器（此处使用 Nsight Compute）。我们先用它测量核函数执行时间，再收集一些可能有助于解释观察结果的“指标”信息。
 
-We'll introduce something new: the profiler (in this case, Nsight Compute). We'll use the profiler first to time the kernel execution times, and then to gather some "metric" information that will possibly shed light on our observations.
+必须先完成任务 1。然后加载 Nsight Compute 模块：
 
-It's necessary to complete task 1 first. Next, load the Nsight Compute module:
 ```
 module load nsight-compute
 ```
 
-Then, launch Nsight as follows:
-(you may want to make your terminal session wide enough to make the output easy to read)
+接着按如下方式启动 Nsight：
+（可以适当加宽终端窗口，以便阅读输出。）
 
 ```
 lsfrun nv-nsight-cu-cli ./matrix_sums
 ```
 
-What does the output tell you?
-Can you locate the lines that identify the kernel durations?
-Are the kernel durations the same or different?
-Would you expect them to be the same or different?
+输出提供了哪些信息？
+你能找到标识核函数运行时间的行吗？
+两个核函数的运行时间相同还是不同？
+你原本预期它们相同还是不同？
 
-
-Next, launch *Nsight* as follows:
+接下来，按如下方式启动 *Nsight*：
 
 ```
 lsfrun nv-nsight-cu-cli --metrics l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum ./matrix_sums
 ```
 
-Our goal is to measure the global memory load efficiency of our kernels. In this case we have asked for two metrics: "*l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum*" (the number of global memory load requests) and "*l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum*" (the number of sectors requested for global loads). This first metric above represents the denominator (requests) of the desired measurement (transactions per request) and the second metric represents the numerator (transactions). Dividing these numbers will give us the number of transactions per request. 
+我们的目标是测量核函数的全局内存加载效率。这里请求了两个指标：*l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum*（全局内存加载请求数）和 *l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum*（全局加载所请求的扇区数）。前一个指标是目标度量“每次请求的事务数”的分母（请求数），后一个指标是分子（事务数）。两者相除即可得到每次请求的事务数。
 
-What similarities or differences do you notice between the *row_sum* and *column_sum* kernels?
-Do the kernels (*row_sum*, *column_sum*) have the same or different efficiencies?
-Why?
-How does this correspond to the observed kernel execution times for the first profiling run?
+*row_sum* 和 *column_sum* 核函数之间有哪些相同点或不同点？
+两个核函数（*row_sum*、*column_sum*）的效率相同还是不同？
+为什么？
+这与第一次性能分析中观察到的核函数执行时间有何对应关系？
 
-Can we improve this?  (Stay tuned for the next CUDA training session.)
+我们能否改进它？（请关注下一次 CUDA 培训课程。）
 
-Here is a useful blog to help you get familiar with Nsight Compute: https://devblogs.nvidia.com/using-nsight-compute-to-inspect-your-kernels/
-
+以下博客有助于熟悉 Nsight Compute：https://devblogs.nvidia.com/using-nsight-compute-to-inspect-your-kernels/

@@ -1,79 +1,78 @@
-# Homework 6
+# 作业 6
 
-These exercises will have you use Unified Memory to utilize GPUs on non-trivial data structures.
+这些练习将引导你使用统一内存（Unified Memory），在非简单数据结构上利用 GPU。
 
-## **1. Porting Linked Lists to GPUs**
+## **1. 将链表移植到 GPU**
 
-For your first task, you are given a code that assembles a linked list on the CPU, and then attempts to print an element from the list. Your task is to modify the code using UM techniques, so that the linked list can be correctly traversed either from CPU code or from GPU code. Hint: there is only one line in the file that needs to be modified to do this exercise.
+第一个任务提供了一段代码，它在 CPU 上构建链表，然后尝试打印链表中的一个元素。你的任务是使用统一内存技术修改代码，使 CPU 代码或 GPU 代码都能正确遍历链表。提示：本练习只需修改文件中的一行。
 
-Compile it using the following:
+使用以下命令进行编译：
 
 ```
 module load cuda
 nvcc -o linked_list linked_list.cu
 ```
 
-The module load command selects a CUDA compiler for your use. The module load command only needs to be done once per session/login. *nvcc* is the CUDA compiler invocation command. The syntax is generally similar to gcc/g++.
+`module load` 命令用于选择 CUDA 编译器。每次会话或登录只需执行一次。*nvcc* 是调用 CUDA 编译器的命令，其语法通常与 gcc/g++ 类似。
 
-To run your code, we will use an LSF command:
+使用以下 LSF 命令运行代码：
 
 ```
 bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1 ./linked_list
 ```
 
-Alternatively, you may want to create an alias for your bsub command in order to make subsequent runs easier:
+也可以为 bsub 命令创建别名，以便后续运行：
 
 ```
 alias lsfrun='bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1'
 lsfrun ./linked_list
 ```
 
-To run your code at NERSC on Cori, we can use Slurm:
+在 NERSC 的 Cori 上，可以使用 Slurm：
 
 ```
 module load esslurm
 srun -C gpu -N 1 -n 1 -t 10 -A m3502 --gres=gpu:1 -c 10 ./linked_list
 ```
 
-Allocation `m3502` is a custom allocation set up on Cori for this training series, and should be available to participants who registered in advance. If you cannot submit using this allocation, but already have access to another allocation that grants access to the Cori GPU nodes (such as m1759), you may use that instead.
+`m3502` 是专为 Cori 上的本培训系列设置的资源配额，提前注册的参与者应当可以使用。如果无法使用此配额提交作业，但你已经拥有其他可访问 Cori GPU 节点的配额（例如 m1759），也可以改用该配额。
 
-If you prefer, you can instead reserve a GPU in an interactive session, and then run an executable any number of times while the Slurm allocation is active (this is recommended if there are enough available nodes):
+如果愿意，也可以在交互式会话中预留一块 GPU，并在 Slurm 资源分配有效期间多次运行可执行文件（如果有足够的可用节点，推荐采用这种方式）：
 
 ```
 salloc -C gpu -N 1 -t 60 -A m3502 --gres=gpu:1 -c 10
 srun -n 1 ./linked_list
 ```
 
-Note that you only need to `module load esslurm` once per login session; this is what enables you to submit to the Cori GPU nodes.
+每次登录会话只需执行一次 `module load esslurm`；该命令使你能够向 Cori GPU 节点提交作业。
 
-Correct output should look like this:
+正确输出应类似：
 
 ```
 key = 3
 key = 3
 ```
 
-If you need help, refer to *linked_list_solution.cu*
+如需帮助，请参考 *linked_list_solution.cu*。
 
+## **2. 数组递增**
 
-## **2. Array Increment**
+本练习提供了一段在 GPU 上递增大型数组中各元素的代码。
 
-In this exercise, you are given a code that increments a large array on the GPU.
+a. 首先，直接编译代码并进行性能分析：
 
- a. First, compile and profile the code as-is:
+```
+module load nsight-systems
+nvcc -o array_inc array_inc.cu
+lsfrun nsys profile --stats=true ./array_inc
+```
 
-   ```
-   module load nsight-systems
-   nvcc -o array_inc array_inc.cu
-   lsfrun nsys profile --stats=true ./array_inc
-   ```
- 
-   Make a note of the kernel execution duration.
-   
- b. Now, modify the code to use managed memory. Replace the malloc operations with cudaMallocManaged, and eliminate the cudaMemcpy operations.  Do you need to replace the *cudaMemcpy* operation from device to host with a *cudaDeviceSynchronize()*? Why? Now, compile and profile the code again. Compare the kernel execution duration to the previous result. Note the profiler indication of CPU and GPU page faults.
+记录核函数执行时间。
 
- c. Now, modify the code to insert prefetching of the array to the GPU immediately before the kernel call, and back to the CPU immediately after the kernel call. Compile and profile the code again. Compare the kernel execution time to the previous results. Are there still any page faults? Why?
- 
- d. Bonus: Modify the code to run the *inc()* kernel 10000 times in a row instead of just once. What can be said about the impact of memory operations on our runtime? What would this suggest for a real-world application?
+b. 现在修改代码以使用托管内存。将 malloc 操作替换为 cudaMallocManaged，并删除 cudaMemcpy 操作。是否需要用 *cudaDeviceSynchronize()* 替换从设备到主机的 *cudaMemcpy* 操作？为什么？然后再次编译并分析代码。将核函数执行时间与此前结果比较，并注意性能分析器所显示的 CPU 和 GPU 缺页情况。
 
-If you need help, refer to the *array_inc_solution.cu*.
+c. 现在修改代码，在核函数调用前立即将数组预取到 GPU，并在核函数调用后立即预取回 CPU。再次编译并分析代码。将核函数执行时间与此前结果比较。是否仍存在缺页？为什么？
+
+d. 附加任务：修改代码，连续运行 *inc()* 核函数 10000 次，而不是只运行一次。内存操作对运行时间有何影响？这对实际应用程序有何启示？
+
+如需帮助，请参考 *array_inc_solution.cu*。

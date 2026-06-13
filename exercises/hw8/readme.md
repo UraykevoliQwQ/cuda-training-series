@@ -1,137 +1,137 @@
-This excercise, in 3 parts, is designed to walk you through a Nsight Compute-driven analysis-driven optimization sequence. The overall exercise is focused on optimizing square matrix transpose.  This operation can be simply described as:
+本练习分为 3 个部分，旨在引导你完成一个由 Nsight Compute 驱动、基于分析逐步优化的过程。整个练习聚焦于优化方阵转置。该操作可简单描述为：
 
 Bij = Aji
 
-for input matrix A, output matrix B, and indices i and j varying over the square matrix side dimension.  This algorithm involves no compute activity, therefore it is a memory bound algorithm, and our final objective will be to come as close as possible to the available memory bandwidth of the GPU we are running on.
+其中 A 为输入矩阵，B 为输出矩阵，索引 i 和 j 在方阵边长范围内变化。该算法不涉及计算活动，因此属于内存受限算法。最终目标是尽可能接近当前 GPU 的可用内存带宽。
 
-## **1. Naive Global-Memory Matrix Transpose**
+## **1. 使用朴素全局内存的矩阵转置**
 
-For your first task, change into the *task1* directory. There you should edit the *task1.cu* file to complete the matrix transpose operation. Most of the code is written for you, but replace the **FIXME** entries with the proper code to complete the matrix transpose using global memory. The formula given above should guide your efforts. Here are some hints:
+第一个任务是进入 *task1* 目录，编辑 *task1.cu* 文件以完成矩阵转置操作。大部分代码已经提供，请使用正确代码替换 **FIXME**，通过全局内存完成矩阵转置。上面的公式可以指导你完成任务。提示如下：
 
- - Each thread reads from (row, col) and writes to (col, row)
- - Using indexing macro:
+- 每个线程从 (row, col) 读取，并写入 (col, row)
+- 使用索引宏：
 
 ```cpp
 #define INDX( row, col, ld ) ( ( (row) * (ld) ) + (col) ) 
 ld = leading dimension (width)
 ```
 
-If you need help, you can refer to the *task1_solution.cu* file.  Then compile and test your code:
+如需帮助，可以参考 *task1_solution.cu*。然后编译并测试代码：
 
 ```bash
 module load cuda
 ./build_nvcc
 ```
 
-The module load command selects a CUDA compiler for your use. The module load command only needs to be done once per session/login. *nvcc* is the CUDA compiler invocation command. The syntax is generally similar to gcc/g++.
+`module load` 命令用于选择 CUDA 编译器。每次会话或登录只需执行一次。*nvcc* 是调用 CUDA 编译器的命令，其语法通常与 gcc/g++ 类似。
 
-To run your code, we will use an LSF command:
+使用以下 LSF 命令运行代码：
 
 ```bash
 bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1 ./task1
 ```
 
-Alternatively, you may want to create an alias for your bsub command in order to make subsequent runs easier:
+也可以为 bsub 命令创建别名，以便后续运行：
 
 ```bash
 alias lsfrun='bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1'
 lsfrun ./task1
 ```
 
-To run your code at NERSC on Cori, we can use Slurm:
+在 NERSC 的 Cori 上，可以使用 Slurm：
 
 ```bash
 module load esslurm
 srun -C gpu -N 1 -n 1 -t 10 -A m3502 --gres=gpu:1 -c 10 ./task1
 ```
 
-Allocation `m3502` is a custom allocation set up on Cori for this training series, and should be available to participants who registered in advance. If you cannot submit using this allocation, but already have access to another allocation that grants access to the Cori GPU nodes (such as m1759), you may use that instead.
+`m3502` 是专为 Cori 上的本培训系列设置的资源配额，提前注册的参与者应当可以使用。如果无法使用此配额提交作业，但你已经拥有其他可访问 Cori GPU 节点的配额（例如 m1759），也可以改用该配额。
 
-If you prefer, you can instead reserve a GPU in an interactive session, and then run an executable any number of times while the Slurm allocation is active (this is recommended if there are enough available nodes):
+如果愿意，也可以在交互式会话中预留一块 GPU，并在 Slurm 资源分配有效期间多次运行可执行文件（如果有足够的可用节点，推荐采用这种方式）：
 
 ```bash
 salloc -C gpu -N 1 -t 60 -A m3502 --gres=gpu:1 -c 10
 srun -n 1 ./task1
 ```
 
-Note that you only need to `module load esslurm` once per login session; this is what enables you to submit to the Cori GPU nodes.
+每次登录会话只需执行一次 `module load esslurm`；该命令使你能够向 Cori GPU 节点提交作业。
 
-You should get a PASS result indication, along with a measurement of performance in terms of achieved bandwidth.
+程序应显示 PASS 结果，并给出以实际带宽表示的性能测量值。
 
-One you have a PASS result, begin the first round of analysis by running the profiler:
+得到 PASS 结果后，运行性能分析器开始第一轮分析：
 
 ```bash
 module load nsight-compute
 lsfrun nv-nsight-cu-cli --metrics l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum,l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio,l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum,l1tex__t_requests_pipe_lsu_mem_global_op_st.sum,l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_st.ratio,smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct,smsp__sass_average_data_bytes_per_sector_mem_global_op_st.pct ./task1
 ```
 
-Here's a breakdown of the metrics we are requesting from the profiler:
+以下是所请求性能指标的说明：
 
- - *l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum*: The number of global load transactions
- - *l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum*: The number of global load requests
- - *l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio*: The number of global load transactions per request
- - *smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct*: The global load efficiency
- - *l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum*: The number of global store transactions
- - *l1tex__t_requests_pipe_lsu_mem_global_op_st.sum*: The number of global store requests
- - *l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_st.ratio*: The number of global store transactions per request
- - *smsp__sass_average_data_bytes_per_sector_mem_global_op_st.pct*: The global store efficiency
+- *l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum*：全局加载事务数
+- *l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum*：全局加载请求数
+- *l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio*：每次全局加载请求的事务数
+- *smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct*：全局加载效率
+- *l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum*：全局存储事务数
+- *l1tex__t_requests_pipe_lsu_mem_global_op_st.sum*：全局存储请求数
+- *l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_st.ratio*：每次全局存储请求的事务数
+- *smsp__sass_average_data_bytes_per_sector_mem_global_op_st.pct*：全局存储效率
 
-Using these metrics, we can easily observe various characteristics of our kernel. Many of these metrics are self-explanatory, but it may not be immediately obvious how global load and store *efficiency* is calculated. We can also calculate our global load and store efficiences by dividing the theoretical minimum number of transactions per request by the actual number of transactions per request we calculated from the above metrics. 
+利用这些指标，可以轻松观察核函数的各种特征。许多指标不言自明，但全局加载和存储*效率*的计算方式可能并不直观。也可以用每次请求的理论最少事务数除以上述指标计算出的实际事务数，自行计算全局加载和存储效率。
 
-How do we know what the theoretical minimum number of transactions per request actually is? A cache line is 128 bytes, and there are 32 threads in a warp. If the 32 threads are accessing consecutive 4 byte words (i.e. single precision floats), then there should be 4 transactions in that request (we are just asking for four consecutive 32-byte sectors of DRAM). In our case, we are using double precision floats, so the 32 threads would be accessing consecutive 8 byte words (256 bytes total). Therefore, the theoretical minimum number of transactions per request in our case would be 8 (eight consecutive 32-byte sectors of DRAM).
+如何确定每次请求的理论最少事务数？缓存行大小为 128 字节，一个线程束有 32 个线程。如果这 32 个线程访问连续的 4 字节字（即单精度浮点数），该请求应产生 4 个事务，也就是请求 DRAM 中连续的四个 32 字节扇区。本例使用双精度浮点数，因此 32 个线程会访问连续的 8 字节字，总计 256 字节。因此，本例每次请求的理论最少事务数为 8，即 DRAM 中连续的八个 32 字节扇区。
 
-Considering the output of the profiler, are the Global Load Efficiency and Global Store Efficiency both at 100%? Why or why not? This may be a good time to study the load and store indexing carefully, and review the global coalescing rules learned in Homework 4.
+根据性能分析器的输出，全局加载效率和全局存储效率是否都达到了 100%？为什么？此时可以仔细研究加载和存储索引，并回顾作业 4 中学到的全局内存合并访问规则。
 
-## **2. Fix Global Memory Coalescing Issue via Shared-Memory Tiled Transpose**
+## **2. 使用共享内存分块转置修复全局内存合并访问问题**
 
-In task 1, we learned that the naive global memory transpose algorithm suffers from the fact that either the load or store operation must be un-coalesced, i.e. columnar memory access. To fix this, we must come up with a procedure that will allow both coalesced loads and coalesced stores to global memory. Therefore, we will move tiles from the input matrix into shared memory, and then write that tile out to the output matrix, to allow a transpose of the tile. This involves a read from global, write to shared, followe by a read from shared, write to global.
+在任务 1 中，我们了解到，朴素全局内存转置算法必然使加载或存储操作之一无法合并，即产生按列的内存访问。要解决这个问题，必须设计一种过程，使全局内存的加载和存储都能合并。因此，我们先将输入矩阵中的数据块移入共享内存，再将该数据块写入输出矩阵，从而完成块内转置。整个过程包括：从全局内存读取、写入共享内存、从共享内存读取、写入全局内存。
 
-During these two steps, we will need to:
+在这两个步骤中，需要：
 
-- perform an "*in-tile*" transpose, i.e. either read row-wise and write column-wise, or vice versa
-- perform a "*tile-position*" transpose, meaning an input tile at tile indices *i,j* must be stored to tile indices *j,i* in the output matrix.
+- 执行“块内”转置，即按行读取并按列写入，或反之
+- 执行“块位置”转置，即输入矩阵中块索引为 *i,j* 的数据块必须存储到输出矩阵中块索引为 *j,i* 的位置
 
-Change from directory *task1* to *task2*.  Edit the *task2.cu* file, wherever the **FIXME** occurs, to achieve the above two operations. If you need help, refer to the *task2_solution.cu* file. This is the hardest programming assignment of the 3 tasks in this exercise.
+从 *task1* 目录切换到 *task2*。编辑 *task2.cu* 文件中所有出现 **FIXME** 的位置，实现上述两项操作。如需帮助，请参考 *task2_solution.cu*。这是本练习 3 个任务中最难的编程任务。
 
-As in task1, compile and run your code:
+与 task1 一样，编译并运行代码：
 
 ```bash
 ./build_nvcc
 lsfrun ./task2
 ```
 
-You should get a PASS output.  Has the measured bandwidth improved?
+程序应输出 PASS。测得的带宽是否有所提升？
 
-Once again we will use the profiler to help explain our observations.  We have introduced shared memory operations into our algorithm, so we will include shared memory measure metrics in our profiling:
+我们再次使用性能分析器解释观察结果。由于算法中引入了共享内存操作，分析时还要加入共享内存测量指标：
 
 ```bash
 lsfrun nv-nsight-cu-cli --metrics l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum,l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio,l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum,l1tex__t_requests_pipe_lsu_mem_global_op_st.sum,l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_st.ratio,smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct,smsp__sass_average_data_bytes_per_sector_mem_global_op_st.pct,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum,l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum,l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_st.sum,smsp__sass_average_data_bytes_per_wavefront_mem_shared.pct ./task2
 ```
 
- - *l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum*: The number of shared load transactions
- - *l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum*: The number of shared store transactions
- - *l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum*: The number of shared load bank conflicts
- - *l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_st.sum*: The number of shared store bank conflicts
- - *smsp__sass_average_data_bytes_per_wavefront_mem_shared.pct*: Shared Memory efficiency
+- *l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum*：共享内存加载事务数
+- *l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum*：共享内存存储事务数
+- *l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum*：共享内存加载的存储体冲突数
+- *l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_st.sum*：共享内存存储的存储体冲突数
+- *smsp__sass_average_data_bytes_per_wavefront_mem_shared.pct*：共享内存效率
 
-You should be able to confirm that the previous global load/global store efficiency issues have been resolved, with proper coalescing.  However now we have a problem with shared memory: bank conflicts.  Review module 4 information on bank conflicts, for a basic definition of how these arise during shared memory access.
+你应能确认，此前的全局加载/全局存储效率问题已通过正确的合并访问得到解决。不过现在共享内存出现了存储体冲突。请回顾模块 4 中关于存储体冲突的内容，了解这种问题在共享内存访问期间如何产生。
 
-## **3. Fixing shared memory bank conflicts**
+## **3. 修复共享内存存储体冲突**
 
-Our strategy to fix shared memory bank conflicts in this case is fairly simple. We will leave the shared memory indexing unchanged from exercise 2, but we will add a column to the shared memory definition in our code. This will allow both row-wise and columnar access to shared memory (needed for our in-tile transpose step) without bank conflicts.
+本例修复共享内存存储体冲突的策略非常简单。保持练习 2 中的共享内存索引不变，但在代码的共享内存定义中增加一列。这样即可在无存储体冲突的情况下同时按行和按列访问共享内存，而这正是块内转置步骤所需要的。
 
-Change to the *task3* directory.
+切换到 *task3* 目录。
 
-Modify the *task3.cu* code as needed. If you need help, refer to *task3_solution.cu*.
+根据需要修改 *task3.cu*。如需帮助，请参考 *task3_solution.cu*。
 
-Compile and run your code in a similar fashion to the previous 2 tasks.
+采用与前两个任务类似的方式编译并运行代码。
 
-You should get a passing result. Has the achieved bandwidth improved?
+程序应通过验证。实际带宽是否有所提升？
 
-You can profile your code to confirm that we are now using shared memory in an efficient fashion, for both loads and stores.
+可以分析代码，确认加载和存储操作现在都能高效使用共享内存：
 
 ```bash
 lsfrun nv-nsight-cu-cli --metrics l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum,l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum,l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_ld.ratio,l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum,l1tex__t_requests_pipe_lsu_mem_global_op_st.sum,l1tex__average_t_sectors_per_request_pipe_lsu_mem_global_op_st.ratio,smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct,smsp__sass_average_data_bytes_per_sector_mem_global_op_st.pct,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum,l1tex__data_pipe_lsu_wavefronts_mem_shared_op_st.sum,l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum,l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_st.sum,smsp__sass_average_data_bytes_per_wavefront_mem_shared.pct  ./task3
 ```
 
-Finally, if you wish, compare the achieved bandwidth reported by your code, to a proxy measurement of the peak achievable bandwidth, by running the bandwidthTest CUDA sample code and using the device-to-device memory number for comparison.
+最后，如果愿意，可以运行 CUDA 示例 bandwidthTest，并以设备到设备的内存带宽数值作为参照，将代码报告的实际带宽与可达到的峰值带宽近似测量值进行比较。

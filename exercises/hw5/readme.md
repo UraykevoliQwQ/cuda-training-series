@@ -1,101 +1,101 @@
-## **1. Comparing Reductions**
+## **1. 比较归约算法**
 
-For your first task, the code is already written for you. We will compare 3 of the reductions given during the presentation: the naive atomic-only reduction, the classical parallel reduction with atomic finish, and the warp shuffle reduction (with atomic finish).
+第一个任务的代码已经全部编写完成。我们将比较演示中介绍的 3 种归约算法：仅使用原子操作的朴素归约、以原子操作收尾的经典并行归约，以及以原子操作收尾的线程束洗牌归约。
 
-Compile it using the following:
+使用以下命令进行编译：
 
 ```
 module load cuda
 nvcc -o reductions reductions.cu
 ```
 
-The module load command selects a CUDA compiler for your use. The module load command only needs to be done once per session/login. *nvcc* is the CUDA compiler invocation command. The syntax is generally similar to gcc/g++. Let's also load the Nsight Compute module:
+`module load` 命令用于选择 CUDA 编译器。每次会话或登录只需执行一次。*nvcc* 是调用 CUDA 编译器的命令，其语法通常与 gcc/g++ 类似。还需要加载 Nsight Compute 模块：
 
 ```
 module load nsight-compute
 ```
 
-To run your code, we will use an LSF command:
+使用以下 LSF 命令运行代码：
 
 ```
 bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1 nv-nsight-cu-cli ./reductions
 ```
 
-Alternatively, you may want to create an alias for your *bsub* command in order to make subsequent runs easier:
+也可以为 *bsub* 命令创建别名，以便后续运行：
 
 ```
 alias lsfrun='bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1'
 lsfrun nv-nsight-cu-cli ./reductions
 ```
 
-To run your code at NERSC on Cori, we can use Slurm:
+在 NERSC 的 Cori 上，可以使用 Slurm：
 
 ```
 module load esslurm
 srun -C gpu -N 1 -n 1 -t 10 -A m3502 --reservation cuda_training --gres=gpu:1 -c 10 ./reductions
 ```
 
-Allocation `m3502` is a custom allocation set up on Cori for this training series, and should be available to participants who registered in advance. If you cannot submit using this allocation, but already have access to another allocation that grants access to the Cori GPU nodes (such as m1759), you may use that instead.
+`m3502` 是专为 Cori 上的本培训系列设置的资源配额，提前注册的参与者应当可以使用。如果无法使用此配额提交作业，但你已经拥有其他可访问 Cori GPU 节点的配额（例如 m1759），也可以改用该配额。
 
-If you prefer, you can instead reserve a GPU in an interactive session, and then run an executable any number of times while the Slurm allocation is active (this is recommended if there are enough available nodes):
+如果愿意，也可以在交互式会话中预留一块 GPU，并在 Slurm 资源分配有效期间多次运行可执行文件（如果有足够的可用节点，推荐采用这种方式）：
 
 ```
 salloc -C gpu -N 1 -t 60 -A m3502 --reservation cuda_training --gres=gpu:1 -c 10
 srun -n 1 ./reductions
 ```
 
-Note that you only need to `module load esslurm` once per login session; this is what enables you to submit to the Cori GPU nodes.
+每次登录会话只需执行一次 `module load esslurm`；该命令使你能够向 Cori GPU 节点提交作业。
 
-This will run the code with the profiling in its most basic mode, which is sufficient. We want to compare kernel execution times. What do you notice about kernel execution times? Probably, you won't see much difference between the parallel reduction with atomics and the warp shuffle with atomics kernel. Can you theorize why this may be? Our objective with these will be to approach theoretical limits. The theoretical limit for a typical reduction would be determined by the memory bandwidth of the GPU. To calculate the attained memory bandwidth of this kernel, divide the total data size in bytes (use N from the code in your calculation) by the execution time (which you can get from the profiler). How does this number compare to the memory bandwidth of the GPU you are running on? (You could run bandwidthTest sample code to get a proxy/estimate).
+这会以最基本的性能分析模式运行代码，对本练习而言已经足够。我们要比较核函数执行时间。你观察到了什么？以原子操作收尾的并行归约与以原子操作收尾的线程束洗牌核函数之间可能不会有明显差异。你能推测原因吗？我们的目标是让它们接近理论极限。典型归约的理论极限由 GPU 内存带宽决定。要计算该核函数达到的内存带宽，请用总数据大小（字节数，计算时使用代码中的 N）除以执行时间（可从性能分析器获取）。该数值与当前 GPU 的内存带宽相比如何？（可以运行 bandwidthTest 示例代码获得近似值。）
 
-Now edit the code to change *N* from ~8M to 163840 (=640*256)
+现在编辑代码，将 *N* 从约 8M 改为 163840（=640*256）。
 
-Recompile and re-run the code with profiling. Is there a bigger percentage difference between the execution time of the reduce_a and reduce_ws kernel? Why might this be?
+重新编译代码并再次进行性能分析。reduce_a 和 reduce_ws 核函数的执行时间百分比差异是否变大？为什么可能会这样？
 
-Bonus: edit the code to change *N* from ~8M to ~32M.  recompile and run.  What happened? Why?
+附加任务：编辑代码，将 *N* 从约 8M 改为约 32M，然后重新编译并运行。发生了什么？为什么？
 
-## **2. Create a different reduction (besides sum)**
+## **2. 创建另一种归约（求和除外）**
 
-For this exercise, you are given a fully-functional sum-reduction code, similar to the code used for exercise 1 above, except that we will use the 2-stage reduction method without atomic finish. If you wish you can compile and run it as-is to see how it works. Your task is to modify it (*only the kernel*) so that it creates a proper max-finding reduction. That means that the kernel should report the maximum value in the data set, rather than the sum of the data set. You are expected to use a similar parallel-sweep-reduction technique. If you need help, refer to the solution.
+本练习提供了一份功能完整的求和归约代码，与上面练习 1 使用的代码类似，但这里使用不以原子操作收尾的两阶段归约方法。你可以先直接编译运行，观察其工作方式。你的任务是仅修改核函数，使其成为正确的最大值归约。也就是说，核函数应报告数据集中的最大值，而不是数据之和。你应使用类似的并行扫描归约技术。如需帮助，请参考解决方案。
 
 ```
 nvcc -o max_reduction max_reduction.cu
 lsfrun ./max_reduction
 ```
 
-## **3. Revisit row_sums from hw4**
+## **3. 重新研究 hw4 中的 row_sums**
 
-For this exercise, start with the *matrix_sums.cu* code from hw4. As you may recall, the *row_sums* kernel was reading the same data set as the *column_sums* kernel, but running noticeably slower. We now have some ideas how to fix it. See if you can implement a reduction-per-row, to allow the row-sum kernel to approach the performance of the column sum kernel. There are probably several ways to tackle this problem. To see one approach, refer to the solution.
+本练习从 hw4 的 *matrix_sums.cu* 代码开始。你可能还记得，*row_sums* 核函数读取的数据集与 *column_sums* 核函数相同，但运行速度明显较慢。现在我们已经知道了一些修复思路。请尝试实现每行一次归约，使行求和核函数的性能接近列求和核函数。这个问题可能有多种解决方式，其中一种可参考解决方案。
 
-You can start just by compiling the code as-is and running the profiler to remind yourself of the performance (discrepancy).
+可以先直接编译代码并运行性能分析器，以回顾两者的性能差异。
 
-Compile the code and profile it using Nsight Compute:
-
-```
-nvcc -o matrix_sums matrix_sums.cu
-lsfrun nv-nsight-cu-cli ./matrix_sums
-```
-
-Remember from the previous session our top 2 CUDA optimization priorities: lots of threads and efficient use of the memory subsystem. The original row_sums kernel definitely misses the mark for the memory objective. What we've learned about reductions should guide you. There are probably several ways to tackle this:
-
- - Write a straightforward parallel reduction, run it on a row, and use a for-loop to loop the kernel over all rows
- - Assign a warp to each row, to perform everything in one kernel call
- - Assign a threadblock to each row, to perform everything in one kernel call
- - ??
-
-Since the (given) solution may be somewhat unusual, I'll give some hints here if needed:
-
- - The chosen strategy will be to assign one block per row
- - We must modify the kernel launch to launch exactly as many blocks as we have rows
- - The kernel can be adapted from the reduction kernel (atomic is not needed here) from the reduce kernel code in exercise 1 above.
- - Since we are assigning one block per row, we will cause each block to perform a block-striding loop, to traverse the row.  This is conceptually similar to a grid striding loop, except each block is striding individually, one per row.  Refresh your memory of the grid-stride loop, and see if you can work this out.
- - With the block-stride loop, you'll need to think carefully about indexing
-
-After you have completed the work and are getting a successful result, profile the code again to see if the performance of the row_sums kernel has improved:
+使用 Nsight Compute 编译并分析代码：
 
 ```
 nvcc -o matrix_sums matrix_sums.cu
 lsfrun nv-nsight-cu-cli ./matrix_sums
 ```
 
-Your actual performance here (compared to the fairly efficient column_sums kernel) will probably depend quite a bit on the algorithm/method you choose.  See if you can theorize how the various choices may affect efficiency or optimality. If you end up with a solution where the row_sums kernel actually runs faster than the column_sums kernel, see if you can theorize why this may be. Remember the two CUDA optimization priorities, and use these to guide your thinking.
+回顾上一课程中的两项首要 CUDA 优化原则：使用大量线程，以及高效使用内存子系统。原始 row_sums 核函数显然没有达到内存方面的目标。归约算法的知识应能为你提供指导。这个问题可能有多种处理方式：
+
+- 编写简单的并行归约，在一行上运行，并使用 for 循环让核函数遍历所有行
+- 为每行分配一个线程束，在一次核函数调用中完成所有工作
+- 为每行分配一个线程块，在一次核函数调用中完成所有工作
+- 其他方式？
+
+由于所提供的解决方案可能有些不同寻常，下面给出一些提示：
+
+- 所选策略是每行分配一个线程块
+- 必须修改核函数启动配置，使启动的线程块数与行数完全相同
+- 核函数可以从上述练习 1 的归约核函数代码改写而来（此处不需要原子操作）
+- 由于每行分配一个线程块，因此每个线程块需要执行线程块跨步循环来遍历该行。这在概念上类似于网格跨步循环，只不过每个线程块各自跨步，每行一个线程块。请回顾网格跨步循环并尝试实现
+- 使用线程块跨步循环时，需要仔细考虑索引
+
+完成代码并得到正确结果后，再次分析性能，查看 row_sums 核函数是否有所改善：
+
+```
+nvcc -o matrix_sums matrix_sums.cu
+lsfrun nv-nsight-cu-cli ./matrix_sums
+```
+
+这里的实际性能（与相当高效的 column_sums 核函数相比）很可能在很大程度上取决于所选算法或方法。请尝试推测各种选择会如何影响效率或最优性。如果最终实现中的 row_sums 核函数甚至比 column_sums 更快，也请尝试解释原因。记住两项 CUDA 优化原则，并用它们指导思考。

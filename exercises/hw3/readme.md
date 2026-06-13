@@ -1,53 +1,52 @@
-## **1. Vector Add**
+## **1. 向量加法**
 
-We'll use a slight variation on the vector add code presented in a previous homework (*vector_add.cu*).  Edit the code to build a complete vector_add program. You can refer to *vector_add_solution.cu* for a complete example.  For this example, we have made a change to the kernel to use something called a grid-stride loop.  This topic will be dealt with in more detail in a later training session, but for now we can describe it as a flexible kernel design method that allows a simple kernel to handle an arbitrary size data set with an arbitrary size "grid", i.e. the configuration of blocks and threads associated with the kernel launch.  If you'd like to read more about grid-stride loops right now, you can visit https://devblogs.nvidia.com/cuda-pro-tip-write-flexible-kernels-grid-stride-loops/
+我们将使用此前作业中向量加法代码的一个小幅变体（*vector_add.cu*）。请编辑代码，构建完整的 vector_add 程序。完整示例可参考 *vector_add_solution.cu*。在本示例中，我们修改了核函数，使其使用一种称为网格跨步循环（grid-stride loop）的结构。后续培训课程会更详细地介绍这一主题；目前可以将它理解为一种灵活的核函数设计方法，使简单核函数能够以任意大小的“网格”（即核函数启动时所配置的线程块和线程）处理任意规模的数据集。若想立即了解更多网格跨步循环的内容，可访问：https://devblogs.nvidia.com/cuda-pro-tip-write-flexible-kernels-grid-stride-loops/
 
-As we will see, this flexibility is important for our investigations in section 2 of this homework session.  However, as before, all you need to focus on are the FIXME items, and these sections will be identical to the work you did in a previous homework assignment.  If you get stuck, you can refer to the solution *vector_add_solution.cu*.
+我们将看到，这种灵活性对本次作业第 2 节中的研究非常重要。不过，与之前一样，你只需关注 FIXME 项，这些部分与此前作业中完成的工作完全相同。如果遇到困难，可以参考解决方案 *vector_add_solution.cu*。
 
-Note that this skeleton code includes something we didn't cover in lesson 1: CUDA error checking.  Every CUDA runtime API call returns an error code.  It's good practice (especially if you're having trouble) to rigorously check these error codes.  A macro is given that will make this job easier.  Note the special error checking method after a kernel call.
+请注意，此代码框架包含了第 1 课中尚未介绍的内容：CUDA 错误检查。每个 CUDA 运行时 API 调用都会返回错误码。严格检查这些错误码是一种良好实践，尤其是在排查问题时。代码中提供了一个宏来简化这项工作。请特别注意核函数调用后的错误检查方式。
 
-After editing the code, compile it using the following:
+编辑代码后，使用以下命令进行编译：
 
 ```
 module load cuda
 nvcc -o vector_add vector_add.cu
 ```
 
-The module load command selects a CUDA compiler for your use. The module load command only needs to be done once per session/login. *nvcc* is the CUDA compiler invocation command. The syntax is generally similar to gcc/g++.
+`module load` 命令用于选择要使用的 CUDA 编译器。每次会话或登录只需执行一次该命令。*nvcc* 是调用 CUDA 编译器的命令，其语法通常与 gcc/g++ 类似。
 
-To run your code, we will use an LSF command:
+我们将使用以下 LSF 命令运行代码：
 
 ```
 bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1 ./vector_add
 ```
 
-Alternatively, you may want to create an alias for your bsub command in order to make subsequent runs easier:
+你也可以为 bsub 命令创建别名，以便后续运行：
 
 ```
 alias lsfrun='bsub -W 10 -nnodes 1 -P <allocation_ID> -Is jsrun -n1 -a1 -c1 -g1'
 lsfrun ./vector_add
 ```
 
-To run your code at NERSC on Cori, we can use Slurm:
+在 NERSC 的 Cori 上，可以使用 Slurm 运行代码：
 
 ```
 module load esslurm
 srun -C gpu -N 1 -n 1 -t 10 -A m3502 --reservation cuda_training --gres=gpu:1 -c 10 ./vector_add
 ```
 
-Allocation `m3502` is a custom allocation set up on Cori for this training series, and should be available to participants who registered in advance. If you cannot submit using this allocation, but already have access to another allocation that grants access to the Cori GPU nodes (such as m1759), you may use that instead.
+`m3502` 是专为 Cori 上的本培训系列设置的资源配额，提前注册的参与者应当可以使用。如果无法使用此配额提交作业，但你已经拥有其他可访问 Cori GPU 节点的配额（例如 m1759），也可以改用该配额。
 
-If you prefer, you can instead reserve a GPU in an interactive session, and then run an executable any number of times while the Slurm allocation is active (this is recommended if there are enough available nodes):
+如果愿意，也可以在交互式会话中预留一块 GPU，并在 Slurm 资源分配有效期间多次运行可执行文件（如果有足够的可用节点，推荐采用这种方式）：
 
 ```
 salloc -C gpu -N 1 -t 60 -A m3502 --reservation cuda_training --gres=gpu:1 -c 10
 srun -n 1 ./vector_add
 ```
 
-Note that you only need to `module load esslurm` once per login session; this is what enables you to submit to the Cori GPU nodes.
+请注意，每次登录会话只需执行一次 `module load esslurm`；该命令使你能够向 Cori GPU 节点提交作业。
 
-
-We've also changed the problem size from the previous example, so correct output should look like this:
+我们还修改了相较于此前示例的问题规模，因此正确输出应类似：
 
 ```
 A[0] = 0.120663
@@ -55,79 +54,79 @@ B[0] = 0.615704
 C[0] = 0.736367
 ```
 
-the actual numerical values aren't too important, as long as C[0] = A[0] + B[0]
+具体数值并不十分重要，只要满足 C[0] = A[0] + B[0] 即可。
 
-## **2. Profiling Experiments**
+## **2. 性能分析实验**
 
-Our objective now will be to explore some of the concepts we learned in the lesson.  In particular we want to see what effect grid sizing (choice of blocks, and threads per block) have on performance.  We could do analysis like this using host-code-based timing methods, but we'll introduce a new concept, using a GPU profiler.  In a future session, you'll learn more about the GPU profilers (Nsight Compute and Nsight Systems), but for now we will use Nsight Compute in a fairly simple fashion to get some basic data about kernel behavior, to use for comparison.
-(If you'd like to read more about the Nsight profilers, you can start here: https://devblogs.nvidia.com/migrating-nvidia-nsight-tools-nvvp-nvprof/)
+现在的目标是探索课程中学到的一些概念。具体来说，我们希望了解网格大小（线程块数量及每个线程块的线程数）的选择会对性能产生什么影响。我们可以使用基于主机代码的计时方法进行此类分析，但这里将引入一个新概念：使用 GPU 性能分析器。在后续课程中，你将进一步学习 GPU 性能分析器（Nsight Compute 和 Nsight Systems）；目前我们仅以较简单的方式使用 Nsight Compute，获取一些核函数行为的基础数据以供比较。
+（若想进一步了解 Nsight 性能分析器，可从这里开始：https://devblogs.nvidia.com/migrating-nvidia-nsight-tools-nvvp-nvprof/）
 
-First, note that the code has these two lines in it:
+首先，请注意代码中包含以下两行：
 
 ```
   int blocks = 1;  // modify this line for experimentation
   int threads = 1; // modify this line for experimentation
 ```
 
-These lines control the grid sizing.  The first variable blocks chooses the total number of blocks to launch.  The second variable threads chooses the number of threads per block to launch.  This second variable must be constrained to choices between 1 and 1024, inclusive.  These are limits imposed by the GPU hardware.
+这两行控制网格大小。第一个变量 blocks 决定启动的线程块总数，第二个变量 threads 决定每个线程块启动的线程数。第二个变量必须限制在 1 到 1024（含）之间，这是 GPU 硬件施加的限制。
 
-Let's consider 3 cases.  In each case, we will modify the blocks and threads variables, recompile the code, and then run the code under the Nsight Compute profiler.
+下面考虑 3 种情况。每种情况下，我们都会修改 blocks 和 threads 变量，重新编译代码，然后在 Nsight Compute 性能分析器下运行。
 
-Nsight Compute is installed as part of newer CUDA toolkits (10.1 and newer), but the path to the command line tool may or may not be set up as part of your CUDA install.  Therefore it may  be necessary to specify the complete command line to access the tool.  We will demonstrate that here with our invocations.
+较新的 CUDA 工具包（10.1 及以上）已包含 Nsight Compute，但其命令行工具路径不一定已在 CUDA 安装过程中配置好。因此，可能需要指定完整命令来访问该工具。下面的调用将对此进行演示。
 
-For the following profiler experiments, we will assume you have loaded the profile module and acquired a node for interactive usage:
+在以下性能分析实验中，假设你已经加载 profile 模块，并获取了一个用于交互操作的节点：
 
 ```
 module load nsight-compute
 bsub -W 30 -nnodes 1 -P <allocation_ID> -Is /bin/bash
 ```
 
-### **2a.  1 block of 1 thread**
+### **2a. 1 个线程块，每块 1 个线程**
 
-For this experiment, leave the code as you have created it to complete exercise 1 above.  When running the code you may have noticed it takes a few seconds to run, however the duration is not particularly long.  This raises the question "how much of that time is the kernel running?"  The profiler can help us answer that question, and we can use this duration (or various other characteristics) as indicators of "performance" for comparison.  The kernel is designed to do the same set of arithmetic calculations regardless of the grid sizing choices, so we can say that shorter kernel duration corresponds to higher performance.
+在本实验中，保持完成上述练习 1 后的代码不变。运行代码时，你可能已经注意到程序需要几秒钟，但时长并不算特别长。这就引出了一个问题：“其中有多少时间是核函数在运行？”性能分析器可以帮助回答这个问题。我们可以使用该时长（或其他各种特征）作为“性能”指标进行比较。无论网格大小如何选择，该核函数执行的算术计算集合都相同，因此核函数运行时间越短，就代表性能越高。
 
-If you'd like to get a basic idea of "typical" profiler output, you could use the following command:
+若想初步了解“典型”的性能分析器输出，可以使用以下命令：
 
 ```
 jsrun -n1 -a1 -c1 -g1 nv-nsight-cu-cli ./vector_add
 ```
 
-However for this 1 block/1 thread test case, the profiler will spend several minutes assembling the requested set of information.  Since our focus is on kernel duration, we can use a command that allows the profiler to run more quickly:
+不过，对于 1 个线程块、1 个线程的测试，性能分析器需要花费几分钟来收集所请求的信息。由于我们主要关注核函数运行时间，可以使用以下命令加快分析：
 
 ```
 jsrun -n1 -a1 -c1 -g1 nv-nsight-cu-cli  --section SpeedOfLight --section MemoryWorkloadAnalysis ./vector_add
 ```
 
-This will allow the profiler to complete its work in under a minute.
+这样性能分析器可以在一分钟内完成工作。
 
-We won't parse all the output, but we're interested in these lines:
+我们不会解析全部输出，但重点关注以下行：
 
 ```
 Duration                                                                        second                           2.86
 ```
 
-and:
+以及：
 
 ```
 Memory Throughput                                                         Mbyte/second                         204.25
 ```
 
-The above indicate that our kernel took about 3 seconds to run and achieved around 200MB/s "throughput" i.e. combined read and write activity, to the GPU memory.  A Tesla V100 has around 700-900 GB/s of available memory throughput, so this code isn't using the available memory bandwidth very well, amongst other issues.  Can we improve the situation with some changes to our grid sizing?
+以上结果表明，核函数运行约 3 秒，GPU 内存的“吞吐量”（即读写活动总量）约为 200 MB/s。Tesla V100 可用的内存吞吐量约为 700-900 GB/s，因此除了其他问题外，这段代码并未充分利用可用内存带宽。调整网格大小能否改善这种情况？
 
-### **2b.  1 block of 1024 threads**
+### **2b. 1 个线程块，每块 1024 个线程**
 
-In our training session, we learned that we want "lots of threads".  More specifically we learned that we'd like to deposit as many as 2048 threads on a single SM, and ideally we'd like to do this across all the SMs in the GPU.  This allows the GPU to do "latency hiding" which we said was very important for GPU performance, and in the case of this code, the extra thread behavior will help with memory utilization, as well, as we shall see.  In fact, for this code, "lots of threads/latency hiding" and "efficient use of memory" are two sides of the same coin.  This will become more evident in the next training session.
+培训课程中提到，我们需要“很多线程”。更具体地说，我们希望在单个 SM 上放置多达 2048 个线程，并且最好在 GPU 的所有 SM 上都这样做。这使 GPU 能够进行“延迟隐藏”，而这对 GPU 性能非常重要。对于本代码，额外的线程还有助于提高内存利用率。事实上，在这里，“大量线程/延迟隐藏”和“高效使用内存”是一件事的两个方面。下一次培训中会更清楚地说明这一点。
 
-So let's take a baby step with our code.  Let's change from 1 block of 1 thread to 1 block of 1024 threads. As we've learned, this structure isn't very good, because it can use at most a single SM on our GPU, but can it improve performance at all?
+先迈出一小步：将 1 个线程块、每块 1 个线程改为 1 个线程块、每块 1024 个线程。我们已经了解到，这种结构并不理想，因为它最多只能使用 GPU 上的一个 SM，但它是否仍能提升一些性能？
 
-Edit the code to make the changes to the threads (1024) variable only.  Leave the blocks variable at 1. Recompile the code and then rerun the same profiler command.  What are the kernel duration and (achieved) memory throughput now?
+编辑代码，仅将 threads 变量改为 1024，blocks 变量保持为 1。重新编译代码，并再次运行相同的性能分析命令。现在核函数运行时间和实际内存吞吐量是多少？
 
-(You should now observe a kernel duration that drops from the second range to the millisecond range, and the memory throughput should now be in the GB/s instead of MB/s)
+（此时应当观察到核函数运行时间从秒级降至毫秒级，内存吞吐量也应从 MB/s 提升至 GB/s。）
 
-### **2c. 160 blocks of 1024 threads**
+### **2c. 160 个线程块，每块 1024 个线程**
 
-Let's fill the GPU now.  We learned that a Tesla V100 has 80 SMs, and each SM can handle at most 2048 threads.  If we create a grid of 160 blocks, each of 1024 threads, this should allow for maximum "occupancy" of our kernel/grid on the GPU.  Make the necessary changes to the blocks (= 160) variable (the threads variable should already be at 1024 from step 2b), recompile the code, and rerun the profiler command as given in 2a.  What is the performance (kernel duration) and achieved memory throughput now?
+现在让 GPU 满负荷工作。我们了解到 Tesla V100 有 80 个 SM，每个 SM 最多可处理 2048 个线程。如果创建由 160 个线程块组成、每块 1024 个线程的网格，核函数/网格应当可以在 GPU 上达到最大“占用率”。将 blocks 变量修改为 160（threads 变量应在步骤 2b 中已设为 1024），重新编译代码，并再次运行 2a 中给出的性能分析命令。现在的性能（核函数运行时间）和实际内存吞吐量是多少？
 
-(You should now observe a kernel duration that has dropped to the microsecond range - ~500us  - and a memory throughput that should be "close" to the peak theoretical of 900GB/s for a Tesla V100).
+（此时应当观察到核函数运行时间降至微秒级，约为 500 us；内存吞吐量应“接近”Tesla V100 的 900 GB/s 理论峰值。）
 
-For the Tesla V100 GPU, this calculation of 80 SMs * 2048 threads/SM = 164K threads is our definition of "lots of threads". 
+对于 Tesla V100 GPU，80 个 SM × 2048 个线程/SM = 164K 个线程，这就是我们所说的“很多线程”。
